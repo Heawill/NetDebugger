@@ -10,7 +10,7 @@
 
 ## 界面
 
-![Interface](.\interface_zh.png)
+![Interface](./interface_zh.png)
 
 ---
 

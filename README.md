@@ -8,6 +8,12 @@ A cross-platform TCP/UDP debugging tool with a modern web-based UI powered by Ch
 
 ---
 
+## Interface
+
+![Interface](.\interface.png)
+
+---
+
 ## Features
 
 - **TCP Server** — listen on a port, accept multiple clients, send/receive messages, support broadcast and targeted sending

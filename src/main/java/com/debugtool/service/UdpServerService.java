@@ -1,6 +1,8 @@
 package com.debugtool.service;
 
 import com.debugtool.model.LogEntry;
+import com.debugtool.util.HexUtil;
+import com.debugtool.util.I18n;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 

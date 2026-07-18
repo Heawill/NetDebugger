@@ -1,0 +1,5 @@
+.idea/
+installer-output/
+package-input/
+target/
+setJava.txt

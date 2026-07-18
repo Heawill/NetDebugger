@@ -1,7 +1,8 @@
-package com.debugtool;
+package com.debugtool.handler;
 
 import com.debugtool.model.LogEntry;
 import com.debugtool.service.*;
+import com.debugtool.util.I18n;
 import com.google.gson.*;
 import org.cef.browser.CefBrowser;
 import org.cef.callback.CefQueryCallback;

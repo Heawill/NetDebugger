@@ -1,4 +1,4 @@
-package com.debugtool.service;
+package com.debugtool.util;
 
 /**
  * Hex string parsing utility.

@@ -1,4 +1,4 @@
-package com.debugtool.service;
+package com.debugtool.util;
 
 import java.text.MessageFormat;
 import java.util.Locale;

@@ -1,5 +1,6 @@
 package com.debugtool;
 
+import com.debugtool.handler.JSBridgeHandler;
 import org.cef.CefApp;
 import org.cef.CefClient;
 import org.cef.CefSettings;
@@ -9,7 +10,7 @@ import org.cef.browser.CefMessageRouter;
 import org.cef.callback.CefQueryCallback;
 import org.cef.handler.*;
 
-import com.debugtool.service.I18n;
+import com.debugtool.util.I18n;
 import com.debugtool.service.PersistenceService;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -20,7 +21,6 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.*;
 import java.net.InetSocketAddress;
-import java.nio.file.*;
 import java.util.Map;
 
 import com.sun.net.httpserver.HttpServer;
@@ -81,7 +81,7 @@ public class App {
 
             // Window icon (taskbar + title bar)
             try {
-                java.net.URL iconUrl = App.class.getResource("/icon.png");
+                java.net.URL iconUrl = App.class.getResource("/logo/icon.png");
                 if (iconUrl != null) {
                     Image icon = Toolkit.getDefaultToolkit().getImage(iconUrl);
                     frame.setIconImage(icon);
@@ -225,6 +225,8 @@ public class App {
         if (path.endsWith(".png")) return "image/png";
         if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
         if (path.endsWith(".ico")) return "image/x-icon";
+        if (path.endsWith(".woff")) return "font/woff";
+        if (path.endsWith(".ttf")) return "font/truetype";
         return "application/octet-stream";
     }
 

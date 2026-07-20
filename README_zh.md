@@ -137,7 +137,6 @@ JavaFxCEF/
 │           └── logo/                           # logo资源
 │               ├── icon.ico                    # Windows 应用图标
 │               └── icon.png                    # 界面图标资源
-
 ├── pom.xml                                     # Maven 构建配置
 ├── package.sh                                  # jpackage 打包脚本
 ├── run.bat                                     # Windows 开发模式启动脚本
@@ -157,6 +156,11 @@ JavaFxCEF/
 | Vue.js 2.7 | MIT | 前端响应式框架 |
 | Element UI | MIT | UI 组件库 |
 | Gson 2.10 | Apache 2.0 | JSON 序列化 |
+| iconfont (阿里巴巴) | 图标平台 | UI 图标 |
+
+> 图标来源于 iconfont 以下用户合集：
+> - <https://www.iconfont.cn/collections/detail?cid=18468>
+> - <https://www.iconfont.cn/collections/detail?cid=48197>
 
 ---
 

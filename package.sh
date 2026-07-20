@@ -56,7 +56,7 @@ echo ""
   --main-jar "tcp-udp-debug-tool-1.0.0.jar" \
   --main-class "com.debugtool.App" \
   --dest "$OUTPUT_DIR" \
-  --icon "$PROJECT_DIR/src/main/resources/logo/icon.ico" \
+  --icon "$PROJECT_DIR/src/main/resources/logo/logo.ico" \
   --java-options "-Xms128m" \
   --java-options "-Xmx512m"
 

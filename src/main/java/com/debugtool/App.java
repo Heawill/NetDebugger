@@ -57,6 +57,7 @@ public class App {
     private int resizeEdge = 0;
 
     public static void main(String[] args) {
+        System.setProperty("sun.java2d.uiScale", "1.0");
         new App().run();
     }
 
@@ -78,13 +79,13 @@ public class App {
             frame.setUndecorated(true);
             frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
             frame.setSize(WIDTH, HEIGHT);
-            frame.setMinimumSize(new Dimension(900, 600));
+            frame.setMinimumSize(new Dimension(1700, 1000));
             frame.setLocationRelativeTo(null);
             frame.setLayout(new BorderLayout());
 
             // Window icon (taskbar + title bar)
             try {
-                java.net.URL iconUrl = App.class.getResource("/logo/icon.png");
+                java.net.URL iconUrl = App.class.getResource("/logo/logo.png");
                 if (iconUrl != null) {
                     Image icon = Toolkit.getDefaultToolkit().getImage(iconUrl);
                     frame.setIconImage(icon);

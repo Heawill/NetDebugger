@@ -153,11 +153,6 @@ See [THIRD-PARTY](./THIRD-PARTY) for full license details.
 | Vue.js 2.7 | MIT | Frontend reactive framework |
 | Element UI | MIT | UI component library |
 | Gson 2.10 | Apache 2.0 | JSON serialization |
-| iconfont (Alibaba) | Icon platform | UI icons |
-
-> Icons are sourced from the following iconfont user collections:
-> - <https://www.iconfont.cn/collections/detail?cid=18468>
-> - <https://www.iconfont.cn/collections/detail?cid=48197>
 
 ---
 

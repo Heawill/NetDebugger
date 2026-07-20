@@ -58,13 +58,16 @@
 # 构建 fat jar
 mvn clean package
 
-# 直接运行（需要项目根目录下有 runtimes/ 目录）
-java -Djava.library.path="./runtimes/windows-amd64" -jar target/tcp-udp-debug-tool-1.0.0.jar
+# 运行
+java -jar target/tcp-udp-debug-tool-1.0.0.jar
 ```
 
-Windows 下也可直接双击 `run.bat` 启动。
+> 程序内部已实现自动寻找JCEF环境（App.findRuntimesDir方法），在运行时不需要额外指定环境：`-Djava.library.path="./runtimes/windows-amd64"`
 
-> **注意：** 包含 JCEF 原生库的 `runtimes/` 目录会在首次构建时由 `jcefmaven` 自动下载。如果下载失败，请检查网络是否能够访问 `jcefmaven.friwi.me`。
+
+Windows 下构建后也可直接双击 `run.bat` 启动。
+> 需要在run.bat配置你的jdk17路径。
+
 
 ---
 
@@ -72,30 +75,8 @@ Windows 下也可直接双击 `run.bat` 启动。
 
 使用 `jpackage` 创建自包含的应用镜像（app-image），终端用户无需安装 JDK。
 
-#### 第一步：构建 fat jar
 
-```bash
-mvn clean package
-```
-
-#### 第二步：准备 `package-input/` 目录
-
-在项目根目录下创建 `package-input/`，结构如下：
-
-```
-package-input/
-├── tcp-udp-debug-tool-1.0.0.jar    # 构建产物（fat jar）
-└── runtimes/                         # JCEF 原生二进制文件
-    └── windows-amd64/                # Chromium DLL 等
-        ├── chrome_elf.dll
-        ├── libcef.dll
-        ├── jcef.dll
-        └── ...（其他原生库）
-```
-
-> `runtimes/` 目录在执行 `mvn package` 后会自动生成在项目根目录，将其复制（或软链接）到 `package-input/` 中即可。
-
-#### 第三步：运行打包脚本
+#### 运行打包脚本
 
 修改 `package.sh` 中的 `JDK_HOME` 路径，指向你的 JDK 17+ 安装目录，然后执行：
 
@@ -104,6 +85,8 @@ bash package.sh
 ```
 
 输出将位于 `installer-output/NetDebugger/`。用户可直接在该目录中启动 `NetDebugger.exe`，无需安装 JDK。
+
+> windows下请安装git bash以支持sh脚本执行，安装后使用git bash中运行package.sh脚本。
 
 #### 自定义打包参数
 
@@ -128,32 +111,38 @@ JavaFxCEF/
 ├── src/
 │   └── main/
 │       ├── java/com/debugtool/
-│       │   ├── App.java                   # 主入口（AWT 窗口 + JCEF + HTTP 服务器）
-│       │   ├── JSBridgeHandler.java       # JS ↔ Java 桥接层
+│       │   ├── App.java                        # 主入口（AWT 窗口 + JCEF + HTTP 服务器）
+│       │   ├── handler/
+│       │   │   └── JSBridgeHandler.java        # JS ↔ Java 桥接层
 │       │   ├── model/
-│       │   │   └── LogEntry.java          # 日志数据模型
-│       │   └── service/
-│       │       ├── TcpServerService.java  # TCP 服务器逻辑
-│       │       ├── TcpClientService.java  # TCP 客户端逻辑
-│       │       ├── UdpServerService.java  # UDP 服务器逻辑
-│       │       ├── UdpClientService.java  # UDP 客户端逻辑
-│       │       ├── HexUtil.java           # 十六进制编解码工具
-│       │       ├── I18n.java              # 国际化工具
-│       │       └── PersistenceService.java# 会话持久化 I/O
+│       │   │   └── LogEntry.java               # 日志数据模型
+│       │   ├── service/
+│       │   │    ├── TcpServerService.java      # TCP 服务器逻辑
+│       │   │    ├── TcpClientService.java      # TCP 客户端逻辑
+│       │   │    ├── UdpServerService.java      # UDP 服务器逻辑
+│       │   │    ├── UdpClientService.java      # UDP 客户端逻辑
+│       │   │    └── PersistenceService.java    # 会话持久化 I/O
+│       │   └── util/
+│       │       ├── HexUtil.java                # 十六进制编解码工具
+│       │       └── I18n.java                   # 国际化工具
 │       └── resources/
-│           ├── web/                       # Vue + Element UI 前端
-│           │   ├── index.html
-│           │   └── img/
-│           ├── i18n/                      # 语言资源文件
+│           ├── web/                            # Vue + Element UI 前端
+│           │   ├── css/
+│           │   ├── img/
+│           │   ├── js/
+│           │   └── index.html
+│           ├── i18n/                           # 国际化语言资源文件
 │           │   ├── messages.properties
 │           │   └── messages_zh_CN.properties
-│           ├── icon.png                   # 窗口图标
-│           └── icon.ico                   # Windows 应用图标
-├── pom.xml                                # Maven 构建配置
-├── package.sh                             # jpackage 打包脚本
-├── run.bat                                # Windows 开发模式启动脚本
-├── LICENSE                                # MIT 许可证
-└── THIRD-PARTY                            # 第三方依赖许可证
+│           └── logo/                           # logo资源
+│               ├── icon.ico                    # Windows 应用图标
+│               └── icon.png                    # 界面图标资源
+
+├── pom.xml                                     # Maven 构建配置
+├── package.sh                                  # jpackage 打包脚本
+├── run.bat                                     # Windows 开发模式启动脚本
+├── LICENSE                                     # MIT 许可证
+└── THIRD-PARTY                                 # 第三方依赖许可证
 ```
 
 ---

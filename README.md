@@ -58,13 +58,14 @@ A cross-platform TCP/UDP debugging tool with a modern web-based UI powered by Ch
 # Build the fat jar
 mvn clean package
 
-# Run directly (requires runtimes/ directory in project root)
-java -Djava.library.path="./runtimes/windows-amd64" -jar target/tcp-udp-debug-tool-1.0.0.jar
+# Run
+java -jar target/tcp-udp-debug-tool-1.0.0.jar
 ```
 
-Or simply double-click `run.bat` on Windows.
+> The program internally implements automatic JCEF environment discovery (`App.findRuntimesDir` method), so no additional environment specification is needed at runtime: `-Djava.library.path="./runtimes/windows-amd64"`
 
-> **Note:** The `runtimes/` directory containing JCEF native binaries is automatically downloaded by `jcefmaven` during the first build. If the download fails, check your network connection to `jcefmaven.friwi.me`.
+On Windows, you can also simply double-click `run.bat` after building.
+> You need to configure your JDK17 path in `run.bat`.
 
 ---
 
@@ -72,30 +73,7 @@ Or simply double-click `run.bat` on Windows.
 
 Use `jpackage` to create a self-contained app-image — end users do **not** need a JDK to run it.
 
-#### Step 1: Build the fat jar
-
-```bash
-mvn clean package
-```
-
-#### Step 2: Prepare the `package-input/` directory
-
-Create `package-input/` in the project root with the following structure:
-
-```
-package-input/
-├── tcp-udp-debug-tool-1.0.0.jar    # Built fat jar
-└── runtimes/                         # JCEF native binaries
-    └── windows-amd64/                # Chromium DLLs, etc.
-        ├── chrome_elf.dll
-        ├── libcef.dll
-        ├── jcef.dll
-        └── ... (other native libs)
-```
-
-> The `runtimes/` directory is automatically populated by `jcefmaven` in the project root after `mvn package`. Simply copy (or symlink) it into `package-input/`.
-
-#### Step 3: Run the package script
+#### Run the Package Script
 
 Edit the `JDK_HOME` path in `package.sh` to point to your JDK 17+ installation, then:
 
@@ -104,6 +82,8 @@ bash package.sh
 ```
 
 The output will be in `installer-output/NetDebugger/`. Users can launch `NetDebugger.exe` directly from that directory — no JDK required.
+
+> On Windows, please install Git Bash to support shell script execution. After installation, run the `package.sh` script in Git Bash.
 
 #### Customizing the Package Script
 
@@ -128,32 +108,37 @@ JavaFxCEF/
 ├── src/
 │   └── main/
 │       ├── java/com/debugtool/
-│       │   ├── App.java                   # Entry point (AWT window + JCEF + HTTP server)
-│       │   ├── JSBridgeHandler.java       # JS ↔ Java bridge
+│       │   ├── App.java                        # Entry point (AWT window + JCEF + HTTP server)
+│       │   ├── handler/
+│       │   │   └── JSBridgeHandler.java        # JS ↔ Java bridge
 │       │   ├── model/
-│       │   │   └── LogEntry.java          # Log data model
-│       │   └── service/
-│       │       ├── TcpServerService.java  # TCP server logic
-│       │       ├── TcpClientService.java  # TCP client logic
-│       │       ├── UdpServerService.java  # UDP server logic
-│       │       ├── UdpClientService.java  # UDP client logic
-│       │       ├── HexUtil.java           # HEX encode/decode utility
-│       │       ├── I18n.java              # Internationalization utility
-│       │       └── PersistenceService.java# Session persistence I/O
+│       │   │   └── LogEntry.java               # Log data model
+│       │   ├── service/
+│       │   │    ├── TcpServerService.java      # TCP server logic
+│       │   │    ├── TcpClientService.java      # TCP client logic
+│       │   │    ├── UdpServerService.java      # UDP server logic
+│       │   │    ├── UdpClientService.java      # UDP client logic
+│       │   │    └── PersistenceService.java    # Session persistence I/O
+│       │   └── util/
+│       │       ├── HexUtil.java                # HEX encode/decode utility
+│       │       └── I18n.java                   # Internationalization utility
 │       └── resources/
-│           ├── web/                       # Vue + Element UI frontend
-│           │   ├── index.html
-│           │   └── img/
-│           ├── i18n/                      # Language resource files
+│           ├── web/                            # Vue + Element UI frontend
+│           │   ├── css/
+│           │   ├── img/
+│           │   ├── js/
+│           │   └── index.html
+│           ├── i18n/                           # Language resource files
 │           │   ├── messages.properties
 │           │   └── messages_zh_CN.properties
-│           ├── icon.png                   # Window icon
-│           └── icon.ico                   # Windows app icon
-├── pom.xml                                # Maven build config
-├── package.sh                             # jpackage build script
-├── run.bat                                # Windows dev-mode launcher
-├── LICENSE                                # MIT License
-└── THIRD-PARTY                            # Third-party license notices
+│           └── logo/                           # Logo resources
+│               ├── icon.ico                    # Windows app icon
+│               └── icon.png                    # Window icon
+├── pom.xml                                     # Maven build config
+├── package.sh                                  # jpackage build script
+├── run.bat                                     # Windows dev-mode launcher
+├── LICENSE                                     # MIT License
+└── THIRD-PARTY                                 # Third-party license notices
 ```
 
 ---

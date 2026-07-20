@@ -1,6 +1,9 @@
 package com.debugtool;
 
 import com.debugtool.handler.JSBridgeHandler;
+import me.friwi.jcefmaven.CefAppBuilder;
+import me.friwi.jcefmaven.CefInitializationException;
+import me.friwi.jcefmaven.UnsupportedPlatformException;
 import org.cef.CefApp;
 import org.cef.CefClient;
 import org.cef.CefSettings;
@@ -109,18 +112,21 @@ public class App {
     // ==================== CEF Initialization ====================
 
     private void initCef() {
-        String installDir = findRuntimesDir();
-        String nativeDir = installDir + File.separator + "windows-amd64";
-        System.setProperty("jcefmaven.installation.dir", installDir);
+        CefAppBuilder builder = new CefAppBuilder();
+        builder.getCefSettings().windowless_rendering_enabled = false;
 
-        addNativeLibraryPath(nativeDir);
+        File installDir = new File(findRuntimesDir(), getPlatformDir());
+        System.out.println("[NetDebugger] CEF install dir: " + installDir.getAbsolutePath());
+        builder.setInstallDir(installDir);
+        builder.setSkipInstallation(true);
 
-        CefSettings settings = new CefSettings();
-        settings.windowless_rendering_enabled = false;
+        try {
+            cefApp = builder.build();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
-        cefApp = CefApp.getInstance(settings);
         System.out.println("[NetDebugger] CEF initialized");
-        System.out.println("[NetDebugger]   Native dir: " + nativeDir);
     }
 
     // ==================== Browser Creation ====================
@@ -366,6 +372,34 @@ public class App {
     }
 
     // ==================== Native Library Path ====================
+
+    /**
+     * Detect platform-specific subdirectory name (e.g. windows-amd64, linux-amd64, macosx-amd64).
+     */
+    private static String getPlatformDir() {
+        String os = System.getProperty("os.name").toLowerCase();
+        String arch = System.getProperty("os.arch").toLowerCase();
+
+        String platform;
+        if (os.contains("win")) {
+            platform = "windows";
+        } else if (os.contains("mac") || os.contains("darwin")) {
+            platform = "macosx";
+        } else if (os.contains("nix") || os.contains("nux") || os.contains("aix")) {
+            platform = "linux";
+        } else {
+            platform = os.replace(" ", "");
+        }
+
+        // Normalize arch to match JCEF naming
+        if (arch.contains("amd64") || arch.contains("x86_64")) {
+            arch = "amd64";
+        } else if (arch.contains("aarch64") || arch.contains("arm64")) {
+            arch = "arm64";
+        }
+
+        return platform + "-" + arch;
+    }
 
     /**
      * Locate the runtimes directory from multiple possible sources,

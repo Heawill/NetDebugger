@@ -17,10 +17,8 @@ set PATH=%JAVA_HOME%\bin;%PATH%
 cd /d "%~dp0"
 
 echo [NetDebugger] Java: %JAVA_HOME%
-echo [NetDebugger] CEF:   %cd%\runtimes
 
 java ^
-  -Djava.library.path="%cd%\runtimes\windows-amd64" ^
   -jar target\tcp-udp-debug-tool-1.0.0.jar
 
 pause

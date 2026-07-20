@@ -7,6 +7,7 @@ set -e
 JDK_HOME="C:/Users/Heawill/.jdks/ms-17.0.19"
 JPACKAGE="$JDK_HOME/bin/jpackage"
 JAVA="$JDK_HOME/bin/java"
+MVN="mvn"
 
 echo "========================================="
 echo " NetDebugger - jpackage App-Image builder"
@@ -16,15 +17,31 @@ echo "Java version:"
 "$JAVA" -version 2>&1
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
-INPUT_DIR="$PROJECT_DIR/package-input"
+INPUT_DIR="$PROJECT_DIR/target"
 OUTPUT_DIR="$PROJECT_DIR/installer-output"
+
+echo ""
+echo "Step 1/3: Building jar with Maven..."
+echo ""
+export JAVA_HOME="$JDK_HOME"
+"$MVN" install -DskipTests
+
+echo ""
+echo "Step 2/3: Preparing input (jar + runtimes)..."
+echo ""
+
+# Copy runtimes into target/ so jpackage bundles them alongside the jar
+if [ -d "$PROJECT_DIR/runtimes" ]; then
+  cp -r "$PROJECT_DIR/runtimes" "$INPUT_DIR/"
+  echo "Runtimes copied into target/"
+fi
 
 # Clean previous output
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
 
 echo ""
-echo "Building app-image (self-contained portable directory)..."
+echo "Step 3/3: Building app-image (self-contained portable directory)..."
 echo "Input:  $INPUT_DIR"
 echo "Output: $OUTPUT_DIR"
 echo ""
@@ -42,6 +59,9 @@ echo ""
   --icon "$PROJECT_DIR/src/main/resources/logo/icon.ico" \
   --java-options "-Xms128m" \
   --java-options "-Xmx512m"
+
+# Clean up runtimes copied into target
+rm -rf "$INPUT_DIR/runtimes"
 
 echo ""
 echo "========================================="

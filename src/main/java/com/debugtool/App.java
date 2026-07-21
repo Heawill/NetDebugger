@@ -23,7 +23,9 @@ import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.*;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.util.Map;
 
 import com.sun.net.httpserver.HttpServer;
@@ -39,6 +41,8 @@ public class App {
     private static String APP_TITLE = "NetDebugger";
     private static final int WIDTH = 1600;
     private static final int HEIGHT = 900;
+    private static final int SINGLE_INSTANCE_PORT = 43127;
+    private static ServerSocket singleInstanceLock;
 
     private JSBridgeHandler bridgeHandler;
     private PersistenceService persistenceService;
@@ -63,6 +67,16 @@ public class App {
     }
 
     private void run() {
+        // Prevent multiple instances
+        if (!acquireSingleInstanceLock()) {
+            JOptionPane.showMessageDialog(null,
+                "NetDebugger is already running.",
+                "NetDebugger",
+                JOptionPane.WARNING_MESSAGE);
+            System.exit(0);
+            return;
+        }
+
         persistenceService = new PersistenceService();
 
         // Load persisted language preference, fallback to system locale
@@ -470,6 +484,15 @@ public class App {
         });
     }
 
+    private static boolean acquireSingleInstanceLock() {
+        try {
+            singleInstanceLock = new ServerSocket(SINGLE_INSTANCE_PORT, 0, InetAddress.getLoopbackAddress());
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     // ==================== Shutdown ====================
 
     private void shutdown() {
@@ -480,6 +503,7 @@ public class App {
         if (cefClient != null) cefClient.dispose();
         if (cefApp != null) cefApp.dispose();
         if (frame != null) frame.dispose();
+        try { if (singleInstanceLock != null) singleInstanceLock.close(); } catch (IOException ignored) {}
         System.exit(0);
     }
 }

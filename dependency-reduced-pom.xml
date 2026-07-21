@@ -13,6 +13,16 @@
         <includes>
           <include>**/*</include>
         </includes>
+        <excludes>
+          <exclude>web/index.html</exclude>
+        </excludes>
+      </resource>
+      <resource>
+        <filtering>true</filtering>
+        <directory>src/main/resources</directory>
+        <includes>
+          <include>web/index.html</include>
+        </includes>
       </resource>
     </resources>
     <plugins>

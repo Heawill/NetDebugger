@@ -10,7 +10,8 @@ A cross-platform TCP/UDP debugging tool with a modern web-based UI powered by Ch
 
 ## Interface
 
-![Interface](./interface.png)
+![Interface](./interface/interface.png)
+![Interface Dark](./interface/interface_dark.png)
 
 ---
 

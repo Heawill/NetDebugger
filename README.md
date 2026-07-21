@@ -27,7 +27,7 @@ A cross-platform TCP/UDP debugging tool with a modern web-based UI powered by Ch
 - **Session persistence** — automatically saves and restores session configurations across restarts
 - **Log display** — color-coded sent/received/system messages, click to copy content
 - **HEX support** — send and receive data in either text (UTF-8/GBK/ASCII) or hexadecimal format
-> Support sending hexadecimal data in the following formats：
+> Support sending hexadecimal data in the following formats：<br>
 > 01 02 03 <br>
 > 010203 <br>
 > 0x01 0x02 0x03 <br>

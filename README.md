@@ -28,12 +28,12 @@ A cross-platform TCP/UDP debugging tool with a modern web-based UI powered by Ch
 - **Log display** — color-coded sent/received/system messages, click to copy content
 - **HEX support** — send and receive data in either text (UTF-8/GBK/ASCII) or hexadecimal format
 > Support sending hexadecimal data in the following formats：
-> 01 02 03
-> 010203
-> 0x01 0x02 0x03
-> 0x010x020x03
-> \x01 \x02 \x03
-> \x01\x02\x03
+> 01 02 03 <br>
+> 010203 <br>
+> 0x01 0x02 0x03 <br>
+> 0x010x020x03 <br>
+> \x01 \x02 \x03 <br>
+> \x01\x02\x03 <br>
 ---
 
 ## Tech Stack

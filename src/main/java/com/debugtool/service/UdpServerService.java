@@ -51,7 +51,8 @@ public class UdpServerService {
                     try {
                         DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                         socket.receive(packet);
-                        String message = new String(packet.getData(), 0, packet.getLength(), "UTF-8");
+                        byte[] data = Arrays.copyOf(packet.getData(), packet.getLength());
+                        String message = HexUtil.toHexString(data);
                         String peer = packet.getAddress().getHostAddress() + ":" + packet.getPort();
                         if (knownClients.add(peer)) {
                             clientAddresses.put(peer, new InetSocketAddress(packet.getAddress(), packet.getPort()));

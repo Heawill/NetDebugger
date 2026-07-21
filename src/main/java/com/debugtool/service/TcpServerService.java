@@ -183,8 +183,6 @@ public class TcpServerService {
         private final Socket socket;
         private final String clientId;
         private final int myGeneration;
-        private BufferedReader reader;
-        private PrintWriter writer;
 
         ClientHandler(Socket socket, String clientId) {
             this.socket = socket;
@@ -195,13 +193,15 @@ public class TcpServerService {
         @Override
         public void run() {
             try {
-                reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
-                writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"), true);
-                String line;
-                while (running && (line = reader.readLine()) != null) {
-                    log(LogEntry.Direction.RECEIVED, line, clientId);
+                InputStream in = socket.getInputStream();
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while (running && (bytesRead = in.read(buffer)) != -1) {
+                    byte[] data = Arrays.copyOf(buffer, bytesRead);
+                    String hexStr = HexUtil.toHexString(data);
+                    log(LogEntry.Direction.RECEIVED, hexStr, clientId);
                     emit("messageReceived", "tcpServer", gson.toJson(new String[][]{
-                        {"clientId", clientId}, {"message", line}
+                        {"clientId", clientId}, {"message", hexStr}
                     }));
                 }
             } catch (IOException e) {
@@ -223,24 +223,16 @@ public class TcpServerService {
                 if ("hex".equals(format)) {
                     byte[] data = HexUtil.parseHex(message);
                     socket.getOutputStream().write(data);
-                    socket.getOutputStream().write('\n');
-                    socket.getOutputStream().flush();
-                } else if (writer != null) {
-                    writer.println(message);
-                    writer.flush();
+                } else {
+                    socket.getOutputStream().write(message.getBytes("UTF-8"));
                 }
+                socket.getOutputStream().flush();
             } catch (IOException ignored) {}
         }
 
         void close() {
             if (socket != null) {
                 try { socket.close(); } catch (IOException ignored) {}
-            }
-            if (reader != null) {
-                try { reader.close(); } catch (IOException ignored) {}
-            }
-            if (writer != null) {
-                writer.close();
             }
         }
     }

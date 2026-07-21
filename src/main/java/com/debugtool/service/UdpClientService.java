@@ -47,7 +47,8 @@ public class UdpClientService {
                     try {
                         DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                         socket.receive(packet);
-                        String message = new String(packet.getData(), 0, packet.getLength(), "UTF-8");
+                        byte[] data = Arrays.copyOf(packet.getData(), packet.getLength());
+                        String message = HexUtil.toHexString(data);
                         String peer = packet.getAddress().getHostAddress() + ":" + packet.getPort();
                         log(LogEntry.Direction.RECEIVED, message, peer);
                         emit("messageReceived", "udpClient", gson.toJson(new String[][]{

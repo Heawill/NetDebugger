@@ -21,8 +21,6 @@ public class TcpClientService {
     private final List<LogEntry> logs = Collections.synchronizedList(new ArrayList<>());
 
     private Socket socket;
-    private BufferedReader reader;
-    private PrintWriter writer;
     private volatile boolean connected = false;
     private String remoteHost;
     private int remotePort;
@@ -42,8 +40,6 @@ public class TcpClientService {
 
         try {
             socket = new Socket(host, port);
-            reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
-            writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"), true);
             connected = true;
 
             logSystem(I18n.get("tcp.client.connected", host, port), host, "tcp.client.connected", host, String.valueOf(port));
@@ -51,13 +47,17 @@ public class TcpClientService {
 
             // Read thread
             Thread readThread = new Thread(() -> {
-                String line;
                 try {
-                    while (connected && (line = reader.readLine()) != null) {
-                        log(LogEntry.Direction.RECEIVED, line, host + ":" + port);
-                        emit("messageReceived", "tcpClient", line);
+                    InputStream in = socket.getInputStream();
+                    byte[] buffer = new byte[4096];
+                    int bytesRead;
+                    while (connected && (bytesRead = in.read(buffer)) != -1) {
+                        byte[] data = Arrays.copyOf(buffer, bytesRead);
+                        String hexStr = HexUtil.toHexString(data);
+                        log(LogEntry.Direction.RECEIVED, hexStr, host + ":" + port);
+                        emit("messageReceived", "tcpClient", hexStr);
                     }
-                    // readLine() returned null → server closed the connection
+                    // read() returned -1 → server closed the connection
                     if (connected) {
                         logSystem(I18n.get("tcp.client.closed_by_server"), "system", "tcp.client.closed_by_server");
                         disconnect();
@@ -82,17 +82,9 @@ public class TcpClientService {
 
     public void disconnect() {
         connected = false;
-        // Close socket first to unblock the read thread's blocking readLine().
-        // Must do this before closing reader/writer, because reader.close()
-        // contends for BufferedReader's lock while readLine() holds it.
+        // Close socket first to unblock the read thread's blocking read().
         if (socket != null) {
             try { socket.close(); } catch (IOException ignored) {}
-        }
-        if (reader != null) {
-            try { reader.close(); } catch (IOException ignored) {}
-        }
-        if (writer != null) {
-            writer.close();
         }
         logSystem(I18n.get("tcp.client.disconnected"), "system", "tcp.client.disconnected");
         emit("disconnected", "tcpClient", 0);
@@ -120,12 +112,10 @@ public class TcpClientService {
             if ("hex".equals(format)) {
                 byte[] data = HexUtil.parseHex(message);
                 socket.getOutputStream().write(data);
-                socket.getOutputStream().write('\n');
-                socket.getOutputStream().flush();
-            } else if (writer != null) {
-                writer.println(message);
-                writer.flush();
+            } else {
+                socket.getOutputStream().write(message.getBytes("UTF-8"));
             }
+            socket.getOutputStream().flush();
         } catch (IOException e) {
             emit("error", "tcpClient", I18n.get("tcp.client.send_failed", e.getMessage()));
             return;

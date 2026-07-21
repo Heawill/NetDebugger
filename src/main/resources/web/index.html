@@ -788,18 +788,56 @@ new Vue({
       if (entry.direction === 'SYSTEM' && entry.i18nKey) {
         return this.$t(entry.i18nKey, entry.i18nArgs || []);
       }
-      if (!session || session.receiveMode !== 'hex') return entry.content;
+      // SENT entries: always display as-is
       if (entry.direction !== 'RECEIVED') return entry.content;
+      if (!session) return entry.content;
+
       var str = entry.content;
       if (!str) return str;
-      try {
-        var bytes = unescape(encodeURIComponent(str));
-        var hex = [];
-        for (var i = 0; i < bytes.length; i++) {
-          hex.push(('0' + bytes.charCodeAt(i).toString(16)).slice(-2));
+
+      // Check if content is a space-separated hex string (backend now sends hex for TCP receive)
+      var isHexStr = /^([0-9A-Fa-f]{2}(\s|$))+$/.test(str);
+
+      if (session.receiveMode === 'hex') {
+        // HEX mode: display hex string directly
+        return isHexStr ? str.toUpperCase() : str;
+      }
+
+      // TEXT mode: decode hex string to UTF-8 text
+      if (isHexStr) {
+        try { return this.hexToUtf8(str); } catch(e) { return str; }
+      }
+      // Fallback for legacy UDP plain text
+      return str;
+    },
+
+    hexToUtf8: function(hexStr) {
+      var hex = hexStr.replace(/\s/g, '');
+      var bytes = [];
+      for (var i = 0; i < hex.length; i += 2) {
+        bytes.push(parseInt(hex.substr(i, 2), 16));
+      }
+      var result = '';
+      var i = 0;
+      while (i < bytes.length) {
+        var b = bytes[i];
+        if (b < 0x80) {
+          result += String.fromCharCode(b);
+          i += 1;
+        } else if (b < 0xE0) {
+          result += String.fromCharCode(((b & 0x1F) << 6) | (bytes[i+1] & 0x3F));
+          i += 2;
+        } else if (b < 0xF0) {
+          result += String.fromCharCode(((b & 0x0F) << 12) | ((bytes[i+1] & 0x3F) << 6) | (bytes[i+2] & 0x3F));
+          i += 3;
+        } else {
+          var cp = ((b & 0x07) << 18) | ((bytes[i+1] & 0x3F) << 12) | ((bytes[i+2] & 0x3F) << 6) | (bytes[i+3] & 0x3F);
+          cp -= 0x10000;
+          result += String.fromCharCode(0xD800 + (cp >> 10), 0xDC00 + (cp & 0x3FF));
+          i += 4;
         }
-        return hex.join(' ').toUpperCase();
-      } catch(e) { return str; }
+      }
+      return result;
     },
     handleEvent: function(json) {
       var evt; try { evt = JSON.parse(json); } catch(e) { console.error('[NetDebugger] JSON parse error:', e, json.substring(0,200)); return; }

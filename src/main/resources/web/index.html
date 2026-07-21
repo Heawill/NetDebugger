@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>NetDebugger</title>
 <link rel="stylesheet" href="./css/element-ui.css">
+<link rel="stylesheet" href="./css/xterm.css">
 <style>
 :root {
   --bg-primary: #f0f4f8; --bg-secondary: #ffffff; --bg-card: #ffffff;
@@ -171,6 +172,15 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
 .el-dropdown-menu__item:hover { background: var(--dropdown-hover) !important; }
 .el-popper[x-placement^=bottom] .popper__arrow { border-bottom-color: var(--border-color) !important; }
 .el-popper[x-placement^=bottom] .popper__arrow::after { border-bottom-color: var(--dropdown-bg) !important; }
+
+.ssh-terminal-container { flex: 1; overflow: hidden; border-radius: 6px; border: 1px solid var(--border-color); }
+.ssh-terminal-container .xterm { height: 100%; padding: 4px; }
+.ssh-terminal-container .xterm-viewport::-webkit-scrollbar { width: 6px; }
+.ssh-terminal-container .xterm-viewport::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+.ssh-terminal-container .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
+.ssh-config-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.ssh-config-row > div { flex: 1; min-width: 120px; }
+.ssh-config-row label { font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 2px; }
 </style>
 </head>
 <body>
@@ -188,6 +198,7 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
       <span><span class="status-dot" :class="tcpCliHasConnected ? 'green' : 'gray'"></span> {{ $t('statusTcpClient') }} {{ tcpCliConnectedCount }}/{{ tcpCliSessions.length }}</span>
       <span><span class="status-dot" :class="udpHasRunning ? 'green' : 'gray'"></span> {{ $t('statusUdpServer') }} {{ udpRunningCount }}/{{ udpSessions.length }}</span>
       <span><span class="status-dot" :class="udpCliHasBound ? 'green' : 'gray'"></span> {{ $t('statusUdpClient') }} {{ udpCliBoundCount }}/{{ udpCliSessions.length }}</span>
+      <span><span class="status-dot" :class="sshHasConnected ? 'green' : 'gray'"></span> {{ $t('statusSshClient') }} {{ sshConnectedCount }}/{{ sshSessions.length }}</span>
     </div>
     <!-- Language Switcher -->
     <el-dropdown trigger="click" @command="setLang" style="margin-right: 6px">
@@ -217,6 +228,53 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
 
   <div class="main-content">
     <el-tabs v-model="activeTab" type="default">
+
+      <!-- ============ SSH CLIENT ============ -->
+      <el-tab-pane name="sshClient">
+        <span slot="label"><img src="img/sshClient.svg" class="tab-icon"/>{{ $t('tabSshClient') }}</span>
+        <div class="tool-panel">
+          <div class="session-sidebar">
+            <el-button class="btn-new" size="small" @click="addSshClient">{{ $t('newSession') }}</el-button>
+            <div v-for="s in sshSessions" :key="s.id" :class="['session-item', {active: sshActiveId===s.id}]" @click="sshActiveId=s.id">
+              <span class="s-name">{{ s.id }}</span>
+              <span :class="['s-status', s.connected?'on':'off']">{{ s.connected ? $t('connected') : $t('disconnected') }}</span>
+              <span class="s-del" @click.stop="removeSession('sshClient',s.id)">×</span>
+            </div>
+          </div>
+          <div class="session-main" v-if="sshActiveSession">
+            <div class="sm-left">
+              <div class="card">
+                <div class="card-title">{{ $t('sshConfig') }} · {{ sshActiveSession.id }}</div>
+                <div class="ssh-config-row">
+                  <div><label>{{ $t('remoteHost') }}</label><el-input v-model="sshActiveSession.host" size="small" placeholder="192.168.1.1"></el-input></div>
+                  <div style="flex:0 0 100px;"><label>{{ $t('port') }}</label><el-input-number v-model="sshActiveSession.port" :min="1" :max="65535" size="small" style="width:100%;"></el-input-number></div>
+                </div>
+                <div class="ssh-config-row" style="margin-top:8px;">
+                  <div><label>{{ $t('username') }}</label><el-input v-model="sshActiveSession.username" size="small" placeholder="root"></el-input></div>
+                  <div><label>{{ $t('password') }}</label><el-input v-model="sshActiveSession.password" size="small" type="password" show-password placeholder="······"></el-input></div>
+                </div>
+                <div style="margin-top:10px;">
+                  <el-button v-if="!sshActiveSession.connected" class="btn-start" size="small" @click="connectSsh(sshActiveSession)" :loading="sshActiveSession.loading" style="width:100%;">{{ $t('connect') }}</el-button>
+                  <el-button v-if="sshActiveSession.connected" class="btn-stop" size="small" @click="disconnectSsh(sshActiveSession)" style="width:100%;">{{ $t('disconnect') }}</el-button>
+                </div>
+                <div class="stats-bar">
+                  <span class="stat-item">{{ $t('status') }}：<span class="stat-value" :style="{color:sshActiveSession.connected?'var(--accent-green)':'var(--text-secondary)'}">{{ sshActiveSession.connected ? $t('connected') : $t('disconnected') }}</span></span>
+                  <span class="stat-item" v-if="sshActiveSession.connected">{{ $t('peer') }}：<span class="stat-value">{{ sshActiveSession.host }}:{{ sshActiveSession.port }}</span></span>
+                </div>
+              </div>
+            </div>
+            <!-- Persistent terminal area: each session owns its own container -->
+            <div class="sm-right" ref="sshTerminalArea">
+              <div v-for="s in sshSessions" :key="'term-'+s.id"
+                   :ref="'sshTerm_' + s.id"
+                   class="ssh-terminal-container"
+                   v-show="s.id === sshActiveId && s.connected"></div>
+              <div class="empty-state" v-if="!sshActiveSession.connected">{{ $t('sshNotConnected') }}</div>
+            </div>
+          </div>
+          <div class="empty-state" v-else>{{ $t('emptySshClient') }}</div>
+        </div>
+      </el-tab-pane>
 
       <!-- ============ TCP SERVER ============ -->
       <el-tab-pane name="tcpServer">
@@ -463,6 +521,8 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
 
 <script src="./js/vue2.js"></script>
 <script src="./js/element-ui.js"></script>
+<script src="./js/xterm.js"></script>
+<script src="./js/xterm-addon-fit.js"></script>
 
 <script>
 /* ==================== I18N ==================== */
@@ -488,6 +548,7 @@ var i18nMessages = {
     statusTcpClient: 'TCP客户端',
     statusUdpServer: 'UDP服务器',
     statusUdpClient: 'UDP客户端',
+    statusSshClient: 'SSH客户端',
     newSession: '+ 新建会话',
     running: '运行中',
     stopped: '已停止',
@@ -560,7 +621,20 @@ var i18nMessages = {
     'udp.server.receive_error': '接收错误: {0}',
     'udp.client.bound': 'UDP 客户端已绑定端口 {0}',
     'udp.client.unbound': 'UDP 客户端已解绑',
-    'udp.client.bind_failed': '绑定失败: {0}'
+    'udp.client.bind_failed': '绑定失败: {0}',
+    // SSH
+    tabSshClient: 'SSH 客户端',
+    sshConfig: 'SSH 连接配置',
+    sshNotConnected: '连接后此区域将显示终端',
+    emptySshClient: '点击左侧「+ 新建会话」创建 SSH 连接',
+    username: '用户名',
+    password: '密码',
+    disconnect: '断开连接',
+    'ssh.client.connected': 'SSH 已连接到 {0}:{1}',
+    'ssh.client.disconnected': 'SSH 已断开',
+    'ssh.client.connection_failed': 'SSH 连接失败: {0}',
+    'ssh.client.connection_lost': 'SSH 连接丢失: {0}',
+    'ssh.client.send_failed': 'SSH 发送失败: {0}'
   },
   'en': {
     language: 'Language',
@@ -583,6 +657,7 @@ var i18nMessages = {
     statusTcpClient: 'TCP Client',
     statusUdpServer: 'UDP Server',
     statusUdpClient: 'UDP Client',
+    statusSshClient: 'SSH Client',
     newSession: '+ New Session',
     running: 'Running',
     stopped: 'Stopped',
@@ -655,7 +730,20 @@ var i18nMessages = {
     'udp.server.receive_error': 'Receive error: {0}',
     'udp.client.bound': 'UDP Client bound to port {0}',
     'udp.client.unbound': 'UDP Client unbound',
-    'udp.client.bind_failed': 'Bind failed: {0}'
+    'udp.client.bind_failed': 'Bind failed: {0}',
+    // SSH
+    tabSshClient: 'SSH Client',
+    sshConfig: 'SSH Connection',
+    sshNotConnected: 'Terminal will appear here after connecting',
+    emptySshClient: 'Click "+ New Session" to create an SSH connection',
+    username: 'Username',
+    password: 'Password',
+    disconnect: 'Disconnect',
+    'ssh.client.connected': 'SSH connected to {0}:{1}',
+    'ssh.client.disconnected': 'SSH disconnected',
+    'ssh.client.connection_failed': 'SSH connection failed: {0}',
+    'ssh.client.connection_lost': 'SSH connection lost: {0}',
+    'ssh.client.send_failed': 'SSH send failed: {0}'
   }
 };
 
@@ -692,6 +780,7 @@ new Vue({
     tcpCliSessions: [], tcpCliActiveId: null,
     udpSessions: [], udpActiveId: null,
     udpCliSessions: [], udpCliActiveId: null,
+    sshSessions: [], sshActiveId: null,
     theme: 'auto',
     lang: currentLocale
   },
@@ -700,6 +789,7 @@ new Vue({
     tcpCliActiveSession() { return this.tcpCliSessions.find(s=>s.id===this.tcpCliActiveId); },
     udpActiveSession() { return this.udpSessions.find(s=>s.id===this.udpActiveId); },
     udpCliActiveSession() { return this.udpCliSessions.find(s=>s.id===this.udpCliActiveId); },
+    sshActiveSession() { return this.sshSessions.find(s=>s.id===this.sshActiveId); },
     tcpHasRunning() { return this.tcpSessions.some(s=>s.running); },
     tcpRunningCount() { return this.tcpSessions.filter(s=>s.running).length; },
     tcpCliHasConnected() { return this.tcpCliSessions.some(s=>s.connected); },
@@ -708,6 +798,8 @@ new Vue({
     udpRunningCount() { return this.udpSessions.filter(s=>s.running).length; },
     udpCliHasBound() { return this.udpCliSessions.some(s=>s.bound); },
     udpCliBoundCount() { return this.udpCliSessions.filter(s=>s.bound).length; },
+    sshHasConnected() { return this.sshSessions.some(s=>s.connected); },
+    sshConnectedCount() { return this.sshSessions.filter(s=>s.connected).length; },
     themeLabel() {
       var m = { light: this.$t('themeLightShort'), dark: this.$t('themeDarkShort'), auto: this.$t('themeAutoShort') };
       return m[this.theme] || this.$t('themeAutoShort');
@@ -717,8 +809,25 @@ new Vue({
   watch: {
     activeTab: function(val) {
       var self = this;
-      this.$nextTick(function() { self.resizeTextareas(); });
+      this.$nextTick(function() {
+        self.resizeTextareas();
+        if (val === 'sshClient' && self.sshActiveSession && self.sshActiveSession.connected) {
+          self.$nextTick(function() { self.initSshTerminal(self.sshActiveSession); });
+        }
+      });
       callJava('persistConfig', 'activeTab', val);
+    },
+    sshActiveId: function(newId, oldId) {
+      var self = this;
+      // Don't destroy - just re-attach terminal to new container on switch
+      if (newId) {
+        this.$nextTick(function() {
+          var newSession = self.sshSessions.find(function(s){return s.id===newId;});
+          if (newSession && newSession.connected && self.activeTab === 'sshClient') {
+            self.$nextTick(function() { self.initSshTerminal(newSession); });
+          }
+        });
+      }
     }
   },
   methods: {
@@ -873,26 +982,32 @@ new Vue({
         case 'clientList': try { var arr=JSON.parse(data); this.$set(s,'clients',arr); } catch(ex){ console.error('[NetDebugger] clientList parse:', ex, data); } break;
         case 'clientConnected': break;
         case 'clientDisconnected': var idx2=s.clients.indexOf(data); if(idx2>=0) s.clients.splice(idx2,1); break;
-        case 'connected': s.connected=true; s.loading=false; break;
-        case 'disconnected': s.connected=false; break;
+        case 'connected': s.connected=true; s.loading=false; if (this.sshSessions.indexOf(s) >= 0 && s.id === this.sshActiveId && this.activeTab === 'sshClient') { this.initSshTerminal(s); } break;
+        case 'disconnected': s.connected=false; if (this.sshSessions.indexOf(s) >= 0) { this.destroySshTerminal(s); } break;
         case 'bound': s.bound=true; s.loading=false; break;
         case 'unbound': s.bound=false; break;
         case 'error': this.$message.error('['+id+'] '+data); s.loading=false; break;
+        case 'terminalData': this.handleTerminalData(s, data); break;
       }
     },
     findSession: function(id) {
-      var all = this.tcpSessions.concat(this.tcpCliSessions, this.udpSessions, this.udpCliSessions);
+      var all = this.tcpSessions.concat(this.tcpCliSessions, this.udpSessions, this.udpCliSessions, this.sshSessions);
       return all.find(function(s){return s.id===id;});
     },
     scrollLog: function(id) {
+      if (this.sshSessions.find(s=>s.id===id)) return; // SSH uses terminal, no log scrolling
       var refName = (this.tcpSessions.find(s=>s.id===id)?'tcpServer':this.tcpCliSessions.find(s=>s.id===id)?'tcpClient':this.udpSessions.find(s=>s.id===id)?'udpServer':'udpClient') + 'Log';
       var el = this.$refs[refName]; if (el) el.scrollTop = el.scrollHeight;
     },
     removeSession: function(type, id) {
-      var arr = this[type==='tcpServer'?'tcpSessions':type==='tcpClient'?'tcpCliSessions':type==='udpServer'?'udpSessions':'udpCliSessions'];
-      var aid = type==='tcpServer'?'tcpActiveId':type==='tcpClient'?'tcpCliActiveId':type==='udpServer'?'udpActiveId':'udpCliActiveId';
+      var arr = this[type==='tcpServer'?'tcpSessions':type==='tcpClient'?'tcpCliSessions':type==='udpServer'?'udpSessions':type==='udpClient'?'udpCliSessions':'sshSessions'];
+      var aid = type==='tcpServer'?'tcpActiveId':type==='tcpClient'?'tcpCliActiveId':type==='udpServer'?'udpActiveId':type==='udpClient'?'udpCliActiveId':'sshActiveId';
       var idx = arr.findIndex(function(s){return s.id===id;});
       if (idx < 0) return;
+      if (type === 'sshClient') {
+        var sess = arr[idx];
+        if (sess.terminal) { sess.terminal.dispose(); sess.terminal = null; sess.fitAddon = null; }
+      }
       arr.splice(idx, 1);
       if (this[aid] === id) this[aid] = arr.length > 0 ? arr[0].id : null;
       callJava('removeInstance', id);
@@ -904,6 +1019,88 @@ new Vue({
     addTcpClient() { var s = makeSession('cli-', {host:'127.0.0.1', port:8888, connected:false}); this.tcpCliSessions.push(s); this.tcpCliActiveId=s.id; callJava('createTcpClient', s.id); this.saveAllSessions(); },
     addUdpServer() { var s = makeSession('udpSrv-', {port:9999, running:false, sendHost:'127.0.0.1', sendPort:9999, clients:[], targetClient:''}); this.udpSessions.push(s); this.udpActiveId=s.id; callJava('createUdpServer', s.id); this.saveAllSessions(); },
     addUdpClient() { var s = makeSession('udpCli-', {port:10000, bound:false, sendHost:'127.0.0.1', sendPort:9999}); this.udpCliSessions.push(s); this.udpCliActiveId=s.id; callJava('createUdpClient', s.id); this.saveAllSessions(); },
+    addSshClient() { var s = makeSession('ssh-', {host:'192.168.1.1', port:22, username:'root', password:'', connected:false, terminal:null, fitAddon:null}); this.sshSessions.push(s); this.sshActiveId=s.id; callJava('createSshClient', s.id); this.saveAllSessions(); },
+
+    connectSsh(s) {
+      var self = this;
+      s.loading = true;
+      callJava('connectSsh', s.id, s.host, s.port, s.username, s.password, 80, 24);
+    },
+    disconnectSsh(s) {
+      this.destroySshTerminal(s);
+      callJava('disconnectSsh', s.id);
+      s.connected = false;
+    },
+    handleTerminalData(s, base64Data) {
+      if (!s || !s.terminal) return;
+      try {
+        var binaryStr = atob(base64Data);
+        var bytes = new Uint8Array(binaryStr.length);
+        for (var i = 0; i < binaryStr.length; i++) { bytes[i] = binaryStr.charCodeAt(i); }
+        s.terminal.write(bytes);
+      } catch(e) { console.error('[NetDebugger] terminalData error:', e); }
+    },
+    initSshTerminal(s) {
+      var self = this;
+      this.$nextTick(function() {
+        if (s.terminal) return;
+        // Dynamic ref: 'sshTerm_' + session id (Vue v-for refs are arrays)
+        var refArr = self.$refs['sshTerm_' + s.id];
+        var container = refArr && refArr.length ? refArr[0] : null;
+        if (!container) return;
+        // Create xterm.js terminal
+        var term = new Terminal({
+          cursorBlink: true,
+          cursorStyle: 'bar',
+          fontSize: 14,
+          fontFamily: "'JetBrains Mono','Consolas','Courier New',monospace",
+          theme: {
+            background: '#0f172a',
+            foreground: '#e2e8f0',
+            cursor: '#22d3ee',
+            selectionBackground: '#334155'
+          },
+          cols: 80,
+          rows: 24
+        });
+        var fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(container);
+        fitAddon.fit();
+
+        // Send keystrokes to backend
+        term.onData(function(data) {
+          var encoder = new TextEncoder();
+          var bytes = encoder.encode(data);
+          var binaryStr = '';
+          for (var i = 0; i < bytes.length; i++) { binaryStr += String.fromCharCode(bytes[i]); }
+          var base64 = btoa(binaryStr);
+          callJava('sshInput', s.id, base64);
+        });
+
+        // Handle resize
+        term.onResize(function(size) {
+          callJava('resizeSshPty', s.id, size.cols, size.rows);
+        });
+
+        // Handle window resize
+        var resizeObserver = new ResizeObserver(function() {
+          try { fitAddon.fit(); } catch(e) {}
+        });
+        resizeObserver.observe(container);
+
+        s.terminal = term;
+        s.fitAddon = fitAddon;
+        s._resizeObserver = resizeObserver;
+
+        // Focus terminal
+        term.focus();
+      });
+    },
+    destroySshTerminal(s) {
+      if (s._resizeObserver) { s._resizeObserver.disconnect(); s._resizeObserver = null; }
+      if (s.terminal) { s.terminal.dispose(); s.terminal = null; s.fitAddon = null; }
+    },
 
     startTcpServer(s) { s.loading=true; callJava('startTcpServer', s.id, s.port, s.maxConn); },
     stopTcpServer(s) { callJava('stopTcpServer', s.id); s.running=false; s.clients=[]; },
@@ -935,6 +1132,7 @@ new Vue({
           else if (type === 'tcpClient') { cfg.host = s.host; cfg.port = s.port; }
           else if (type === 'udpServer') { cfg.port = s.port; }
           else if (type === 'udpClient') { cfg.port = s.port; }
+          else if (type === 'sshClient') { cfg.host = s.host; cfg.port = s.port; cfg.username = s.username; cfg.password = s.password; }
           all.push(cfg);
         });
       }
@@ -942,6 +1140,7 @@ new Vue({
       addSessions(this.tcpCliSessions, 'tcpClient');
       addSessions(this.udpSessions, 'udpServer');
       addSessions(this.udpCliSessions, 'udpClient');
+      addSessions(this.sshSessions, 'sshClient');
       callJava('persistSessions', JSON.stringify(all));
     },
 
@@ -993,6 +1192,12 @@ new Vue({
             self.udpCliSessions.push(sess);
             if (!self.udpCliActiveId) self.udpCliActiveId = s.id;
             callJava('createUdpClient', s.id);
+          } else if (s.type === 'sshClient') {
+            var sess = makeSession('ssh-', {host: s.host || '192.168.1.1', port: s.port || 22, username: s.username || 'root', password: s.password || '', connected: false, terminal: null, fitAddon: null, logs: logs});
+            sess.id = s.id;
+            self.sshSessions.push(sess);
+            if (!self.sshActiveId) self.sshActiveId = s.id;
+            callJava('createSshClient', s.id);
           }
         });
 

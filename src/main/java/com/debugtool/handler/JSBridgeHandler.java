@@ -24,6 +24,7 @@ public class JSBridgeHandler {
     private final ConcurrentHashMap<String, TcpClientService> tcpClients = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, UdpServerService> udpServers = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, UdpClientService> udpClients = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, SshClientService> sshClients = new ConcurrentHashMap<>();
 
     private PersistenceService persistence;
     private volatile boolean restored = false;
@@ -76,6 +77,11 @@ public class JSBridgeHandler {
                     case "persistConfig": persistConfig(a.get(0).getAsString(), a.get(1).getAsString(), cb); break;
                     case "clearLogs": clearLogs(id, cb); break;
                     case "setLanguage": setLanguage(a.get(0).getAsString(), cb); break;
+                    case "createSshClient": createSshClient(id, cb); break;
+                    case "connectSsh": connectSsh(id, a.get(1).getAsString(), a.get(2).getAsInt(), a.get(3).getAsString(), a.get(4).getAsString(), a.get(5).getAsInt(), a.get(6).getAsInt(), cb); break;
+                    case "disconnectSsh": disconnectSsh(id, cb); break;
+                    case "sshInput": sshInput(id, a.get(1).getAsString(), cb); break;
+                    case "resizeSshPty": resizeSshPty(id, a.get(1).getAsInt(), a.get(2).getAsInt(), cb); break;
                     default: if (cb != null) cb.failure(-2, "Unknown: " + m);
                 }
             } catch (Exception e) {
@@ -112,6 +118,7 @@ public class JSBridgeHandler {
         TcpClientService tc = tcpClients.remove(id); if (tc != null) { tc.disconnect(); ok(cb, "removed"); return; }
         UdpServerService us = udpServers.remove(id); if (us != null) { us.stop(); ok(cb, "removed"); return; }
         UdpClientService uc = udpClients.remove(id); if (uc != null) { uc.unbind(); ok(cb, "removed"); return; }
+        SshClientService ss = sshClients.remove(id); if (ss != null) { ss.disconnect(); ok(cb, "removed"); return; }
         if (cb != null) cb.failure(-3, "Not found: " + id);
     }
 
@@ -168,6 +175,39 @@ public class JSBridgeHandler {
         UdpClientService c = udpClients.get(id); if (c != null) { c.send(host, port, msg, encoding, format); ok(cb, null); } else fail(cb, id);
     }
 
+    private void createSshClient(String id, CefQueryCallback cb) {
+        SshClientService s = new SshClientService(json -> pushEvent(id, "sshClient", json));
+        sshClients.put(id, s);
+        ok(cb, id);
+    }
+
+    private void connectSsh(String id, String host, int port, String username, String password, int cols, int rows, CefQueryCallback cb) {
+        SshClientService s = sshClients.get(id);
+        if (s != null) {
+            s.connect(host, port, username, password, cols, rows, errorMsg -> {
+                if (cb != null) cb.failure(-1, errorMsg);
+            });
+            if (cb != null) cb.success("ok");
+        } else {
+            fail(cb, id);
+        }
+    }
+
+    private void disconnectSsh(String id, CefQueryCallback cb) {
+        SshClientService s = sshClients.get(id);
+        if (s != null) { s.disconnect(); ok(cb, null); } else fail(cb, id);
+    }
+
+    private void sshInput(String id, String base64Data, CefQueryCallback cb) {
+        SshClientService s = sshClients.get(id);
+        if (s != null) { s.sendTerminalData(base64Data); ok(cb, null); } else fail(cb, id);
+    }
+
+    private void resizeSshPty(String id, int cols, int rows, CefQueryCallback cb) {
+        SshClientService s = sshClients.get(id);
+        if (s != null) { s.resizePty(cols, rows); ok(cb, null); } else fail(cb, id);
+    }
+
     private void fail(CefQueryCallback cb, String id) { if (cb != null) cb.failure(-3, "Not found: " + id); }
 
     // ==================== Push Events ====================
@@ -209,6 +249,7 @@ public class JSBridgeHandler {
         for (TcpClientService c : tcpClients.values()) c.disconnect();
         for (UdpServerService s : udpServers.values()) s.stop();
         for (UdpClientService c : udpClients.values()) c.unbind();
+        for (SshClientService s : sshClients.values()) s.disconnect();
         executor.shutdownNow();
         if (persistence != null) persistence.shutdown();
     }

@@ -477,7 +477,7 @@ public class App {
         if (wrapper == null) return;
         SwingUtilities.invokeLater(() -> {
             if ("dark".equals(theme)) {
-                wrapper.setBorder(BorderFactory.createLineBorder(new Color(42, 165, 255), 2));
+                wrapper.setBorder(BorderFactory.createLineBorder(new Color(42, 165, 255), 1));
             } else {
                 wrapper.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1));
             }

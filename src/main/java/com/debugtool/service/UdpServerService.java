@@ -105,7 +105,7 @@ public class UdpServerService {
             }
         }
         try {
-            byte[] data = buildData(message, format);
+            byte[] data = buildData(message, encoding, format);
             InetAddress addr = InetAddress.getByName(targetHost);
             DatagramPacket packet = new DatagramPacket(data, data.length, addr, targetPort);
             socket.send(packet);
@@ -134,7 +134,7 @@ public class UdpServerService {
             }
         }
         try {
-            byte[] data = buildData(message, format);
+            byte[] data = buildData(message, encoding, format);
             DatagramPacket packet = new DatagramPacket(data, data.length, addr.getAddress(), addr.getPort());
             socket.send(packet);
             log(LogEntry.Direction.SENT, formatMessage(message, format), clientId);
@@ -156,7 +156,7 @@ public class UdpServerService {
                 return;
             }
         }
-        byte[] data = buildData(message, format);
+        byte[] data = buildData(message, encoding, format);
         for (Map.Entry<String, InetSocketAddress> entry : clientAddresses.entrySet()) {
             try {
                 DatagramPacket packet = new DatagramPacket(data, data.length,
@@ -170,11 +170,11 @@ public class UdpServerService {
         emit("messageSentAll", "udpServer", message);
     }
 
-    private byte[] buildData(String message, String format) {
+    private byte[] buildData(String message, String encoding, String format) {
         if ("hex".equals(format)) {
             return HexUtil.parseHex(message);
         }
-        try { return message.getBytes("UTF-8"); } catch (Exception e) { return message.getBytes(); }
+        try { return message.getBytes(encoding != null ? encoding : "UTF-8"); } catch (Exception e) { return message.getBytes(); }
     }
 
     private String formatMessage(String message, String format) {

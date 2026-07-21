@@ -62,15 +62,15 @@ public class JSBridgeHandler {
                     case "stopUdpServer": stopUdpServer(id, cb); break;
                     case "startUdpClient": startUdpClient(id, a.get(1).getAsInt(), cb); break;
                     case "stopUdpClient": stopUdpClient(id, cb); break;
-                    case "tcpServerSend": tcpServerSend(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(4).getAsString(), cb); break;
-                    case "tcpServerSendAll": tcpServerSendAll(id, a.get(1).getAsString(), a.get(3).getAsString(), cb); break;
+                    case "tcpServerSend": tcpServerSend(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), a.get(4).getAsString(), cb); break;
+                    case "tcpServerSendAll": tcpServerSendAll(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), cb); break;
                     case "tcpServerDisconnectClient": tcpServerDisconnectClient(id, a.get(1).getAsString(), cb); break;
-                    case "tcpClientSend": tcpClientSend(id, a.get(1).getAsString(), a.get(3).getAsString(), cb); break;
-                    case "udpServerSend": udpServerSend(id, a.get(1).getAsString(), a.get(2).getAsInt(), a.get(3).getAsString(), a.get(5).getAsString(), cb); break;
-                    case "udpServerSendToClient": udpServerSendToClient(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(4).getAsString(), cb); break;
-                    case "udpServerSendAll": udpServerSendAll(id, a.get(1).getAsString(), a.get(3).getAsString(), cb); break;
+                    case "tcpClientSend": tcpClientSend(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), cb); break;
+                    case "udpServerSend": udpServerSend(id, a.get(1).getAsString(), a.get(2).getAsInt(), a.get(3).getAsString(), a.get(4).getAsString(), a.get(5).getAsString(), cb); break;
+                    case "udpServerSendToClient": udpServerSendToClient(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), a.get(4).getAsString(), cb); break;
+                    case "udpServerSendAll": udpServerSendAll(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), cb); break;
                     case "udpServerForgetClient": udpServerForgetClient(id, a.get(1).getAsString(), cb); break;
-                    case "udpClientSend": udpClientSend(id, a.get(1).getAsString(), a.get(2).getAsInt(), a.get(3).getAsString(), a.get(5).getAsString(), cb); break;
+                    case "udpClientSend": udpClientSend(id, a.get(1).getAsString(), a.get(2).getAsInt(), a.get(3).getAsString(), a.get(4).getAsString(), a.get(5).getAsString(), cb); break;
                     case "restoreState": restoreState(cb); break;
                     case "persistSessions": persistSessions(a.get(0).getAsString(), cb); break;
                     case "persistConfig": persistConfig(a.get(0).getAsString(), a.get(1).getAsString(), cb); break;
@@ -140,32 +140,32 @@ public class JSBridgeHandler {
         UdpClientService c = udpClients.get(id); if (c != null) { c.unbind(); ok(cb, null); } else fail(cb, id);
     }
 
-    private void tcpServerSend(String id, String clientId, String msg, String format, CefQueryCallback cb) {
-        TcpServerService s = tcpServers.get(id); if (s != null) { s.send(clientId, msg, "UTF-8", format); ok(cb, null); } else fail(cb, id);
+    private void tcpServerSend(String id, String clientId, String msg, String encoding, String format, CefQueryCallback cb) {
+        TcpServerService s = tcpServers.get(id); if (s != null) { s.send(clientId, msg, encoding, format); ok(cb, null); } else fail(cb, id);
     }
-    private void tcpServerSendAll(String id, String msg, String format, CefQueryCallback cb) {
-        TcpServerService s = tcpServers.get(id); if (s != null) { s.sendAll(msg, "UTF-8", format); ok(cb, null); } else fail(cb, id);
+    private void tcpServerSendAll(String id, String msg, String encoding, String format, CefQueryCallback cb) {
+        TcpServerService s = tcpServers.get(id); if (s != null) { s.sendAll(msg, encoding, format); ok(cb, null); } else fail(cb, id);
     }
     private void tcpServerDisconnectClient(String id, String clientId, CefQueryCallback cb) {
         TcpServerService s = tcpServers.get(id); if (s != null) { s.disconnectClient(clientId); ok(cb, null); } else fail(cb, id);
     }
-    private void tcpClientSend(String id, String msg, String format, CefQueryCallback cb) {
-        TcpClientService c = tcpClients.get(id); if (c != null) { c.send(msg, "UTF-8", format); ok(cb, null); } else fail(cb, id);
+    private void tcpClientSend(String id, String msg, String encoding, String format, CefQueryCallback cb) {
+        TcpClientService c = tcpClients.get(id); if (c != null) { c.send(msg, encoding, format); ok(cb, null); } else fail(cb, id);
     }
-    private void udpServerSend(String id, String host, int port, String msg, String format, CefQueryCallback cb) {
-        UdpServerService s = udpServers.get(id); if (s != null) { s.send(host, port, msg, "UTF-8", format); ok(cb, null); } else fail(cb, id);
+    private void udpServerSend(String id, String host, int port, String msg, String encoding, String format, CefQueryCallback cb) {
+        UdpServerService s = udpServers.get(id); if (s != null) { s.send(host, port, msg, encoding, format); ok(cb, null); } else fail(cb, id);
     }
-    private void udpServerSendToClient(String id, String clientId, String msg, String format, CefQueryCallback cb) {
-        UdpServerService s = udpServers.get(id); if (s != null) { s.sendToClient(clientId, msg, "UTF-8", format); ok(cb, null); } else fail(cb, id);
+    private void udpServerSendToClient(String id, String clientId, String msg, String encoding, String format, CefQueryCallback cb) {
+        UdpServerService s = udpServers.get(id); if (s != null) { s.sendToClient(clientId, msg, encoding, format); ok(cb, null); } else fail(cb, id);
     }
-    private void udpServerSendAll(String id, String msg, String format, CefQueryCallback cb) {
-        UdpServerService s = udpServers.get(id); if (s != null) { s.sendAll(msg, "UTF-8", format); ok(cb, null); } else fail(cb, id);
+    private void udpServerSendAll(String id, String msg, String encoding, String format, CefQueryCallback cb) {
+        UdpServerService s = udpServers.get(id); if (s != null) { s.sendAll(msg, encoding, format); ok(cb, null); } else fail(cb, id);
     }
     private void udpServerForgetClient(String id, String clientId, CefQueryCallback cb) {
         UdpServerService s = udpServers.get(id); if (s != null) { s.forgetClient(clientId); ok(cb, null); } else fail(cb, id);
     }
-    private void udpClientSend(String id, String host, int port, String msg, String format, CefQueryCallback cb) {
-        UdpClientService c = udpClients.get(id); if (c != null) { c.send(host, port, msg, "UTF-8", format); ok(cb, null); } else fail(cb, id);
+    private void udpClientSend(String id, String host, int port, String msg, String encoding, String format, CefQueryCallback cb) {
+        UdpClientService c = udpClients.get(id); if (c != null) { c.send(host, port, msg, encoding, format); ok(cb, null); } else fail(cb, id);
     }
 
     private void fail(CefQueryCallback cb, String id) { if (cb != null) cb.failure(-3, "Not found: " + id); }

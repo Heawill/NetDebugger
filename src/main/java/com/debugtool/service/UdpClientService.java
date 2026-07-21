@@ -97,7 +97,7 @@ public class UdpClientService {
             if ("hex".equals(format)) {
                 data = HexUtil.parseHex(message);
             } else {
-                data = message.getBytes("UTF-8");
+                data = message.getBytes(encoding != null ? encoding : "UTF-8");
             }
             InetAddress addr = InetAddress.getByName(targetHost);
             DatagramPacket packet = new DatagramPacket(data, data.length, addr, targetPort);

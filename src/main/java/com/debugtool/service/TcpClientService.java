@@ -113,7 +113,7 @@ public class TcpClientService {
                 byte[] data = HexUtil.parseHex(message);
                 socket.getOutputStream().write(data);
             } else {
-                socket.getOutputStream().write(message.getBytes("UTF-8"));
+                socket.getOutputStream().write(message.getBytes(encoding != null ? encoding : "UTF-8"));
             }
             socket.getOutputStream().flush();
         } catch (IOException e) {

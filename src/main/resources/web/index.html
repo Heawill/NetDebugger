@@ -916,6 +916,34 @@ new Vue({
     udpCliBoundCount() { return this.udpCliSessions.filter(s=>s.bound).length; },
     sshHasConnected() { return this.sshSessions.some(s=>s.connected); },
     sshConnectedCount() { return this.sshSessions.filter(s=>s.connected).length; },
+    /**
+     * Extracts a JSON-stable snapshot of only config fields from all sessions.
+     * Avoids deep-walking xterm Terminal / logs / clients which would break SSH perf.
+     * A shallow watcher on this computed triggers debounced persist on config change.
+     */
+    sessionConfigSnapshot() {
+      var self = this;
+      function extract(arr, type) {
+        return arr.map(function(s) {
+          var cfg = { i: s.id, t: type };
+          if (type === 'tcpServer') { cfg.p = s.port; cfg.m = s.maxConn; }
+          else if (type === 'tcpClient') { cfg.h = s.host; cfg.p = s.port; }
+          else if (type === 'udpServer') { cfg.p = s.port; }
+          else if (type === 'udpClient') { cfg.p = s.port; cfg.sh = s.sendHost; cfg.sp = s.sendPort; }
+          else if (type === 'sshClient') { cfg.h = s.host; cfg.p = s.port; cfg.u = s.username; cfg.pw = s.password; }
+          return cfg;
+        });
+      }
+      return JSON.stringify(
+        [].concat(
+          extract(self.tcpSessions, 'tcpServer'),
+          extract(self.tcpCliSessions, 'tcpClient'),
+          extract(self.udpSessions, 'udpServer'),
+          extract(self.udpCliSessions, 'udpClient'),
+          extract(self.sshSessions, 'sshClient')
+        )
+      );
+    },
     themeLabel() {
       var m = { light: this.$t('themeLightShort'), dark: this.$t('themeDarkShort'), auto: this.$t('themeAutoShort') };
       return m[this.theme] || this.$t('themeAutoShort');
@@ -1434,7 +1462,7 @@ new Vue({
           if (type === 'tcpServer') { cfg.port = s.port; cfg.maxConn = s.maxConn; }
           else if (type === 'tcpClient') { cfg.host = s.host; cfg.port = s.port; }
           else if (type === 'udpServer') { cfg.port = s.port; }
-          else if (type === 'udpClient') { cfg.port = s.port; }
+          else if (type === 'udpClient') { cfg.port = s.port; cfg.sendHost = s.sendHost; cfg.sendPort = s.sendPort; }
           else if (type === 'sshClient') { cfg.host = s.host; cfg.port = s.port; cfg.username = s.username; cfg.password = s.password; }
           all.push(cfg);
         });
@@ -1445,6 +1473,16 @@ new Vue({
       addSessions(this.udpCliSessions, 'udpClient');
       addSessions(this.sshSessions, 'sshClient');
       callJava('persistSessions', JSON.stringify(all));
+    },
+
+    /**
+     * Debounced auto-save triggered by deep watchers on session arrays.
+     * Fires 500ms after the last parameter change, avoiding rapid repeated saves.
+     */
+    scheduleSaveAllSessions: function() {
+      var self = this;
+      if (this._saveTimer) clearTimeout(this._saveTimer);
+      this._saveTimer = setTimeout(function() { self.saveAllSessions(); }, 500);
     },
 
     restoreFromPersisted: function(data) {
@@ -1490,7 +1528,7 @@ new Vue({
             if (!self.udpActiveId) self.udpActiveId = s.id;
             callJava('createUdpServer', s.id);
           } else if (s.type === 'udpClient') {
-            var sess = makeSession('udpCli-', {port: s.port || 10000, bound: false, sendHost: '127.0.0.1', sendPort: 9999, logs: logs});
+            var sess = makeSession('udpCli-', {port: s.port || 10000, bound: false, sendHost: s.sendHost || '127.0.0.1', sendPort: s.sendPort || 9999, logs: logs});
             sess.id = s.id;
             self.udpCliSessions.push(sess);
             if (!self.udpCliActiveId) self.udpCliActiveId = s.id;
@@ -1528,6 +1566,11 @@ new Vue({
     window.handleBridgeEvent = function(json) { self.handleEvent(json); };
     this.$nextTick(function() { self.resizeTextareas(); });
     window.addEventListener('resize', function() { self.resizeTextareas(); });
+
+    // --- Auto-persist session config changes (shallow watch on config-only snapshot) ---
+    // Uses a computed property that extracts only config fields (no terminal/logs/clients)
+    // to avoid deep-walking xterm.js Terminal instances which breaks SSH performance.
+    this.$watch('sessionConfigSnapshot', function() { self.scheduleSaveAllSessions(); });
 
     // --- Theme initialization ---
     var saved = localStorage.getItem('netdebugger-theme');

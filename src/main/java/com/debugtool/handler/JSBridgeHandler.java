@@ -85,6 +85,8 @@ public class JSBridgeHandler {
                     case "sftpList": sftpList(id, a.size() > 1 ? a.get(1).getAsString() : "/", cb); break;
                     case "sftpDownload": sftpDownload(id, a.get(1).getAsString(), a.size()>2 ? a.get(2).getAsString() : "", cb); break;
                     case "sftpUpload": sftpUpload(id, a.get(1).getAsString(), a.get(2).getAsString(), cb); break;
+                    case "sftpDelete": sftpDelete(id, a.get(1).getAsString(), cb); break;
+                    case "sftpRename": sftpRename(id, a.get(1).getAsString(), a.get(2).getAsString(), cb); break;
                     case "pickAndUpload": pickAndUpload(id, cb); break;
                     default: if (cb != null) cb.failure(-2, "Unknown: " + m);
                 }
@@ -225,6 +227,21 @@ public class JSBridgeHandler {
     private void sftpUpload(String id, String remotePath, String base64Data, CefQueryCallback cb) {
         SshClientService s = sshClients.get(id);
         if (s != null) { s.sftpUpload(remotePath, base64Data); ok(cb, null); } else fail(cb, id);
+    }
+
+    private void sftpDelete(String id, String remotePath, CefQueryCallback cb) {
+        SshClientService s = sshClients.get(id);
+        if (s != null) { s.sftpDelete(remotePath); ok(cb, null); } else fail(cb, id);
+    }
+
+    private void sftpRename(String id, String oldPath, String newName, CefQueryCallback cb) {
+        SshClientService s = sshClients.get(id);
+        if (s == null || !s.isConnected()) { fail(cb, id); return; }
+        SshClientService svc = s;
+        String dir = oldPath.contains("/") ? oldPath.substring(0, oldPath.lastIndexOf('/')) : "/";
+        String newPath = (dir.equals("/") ? "/" : dir + "/") + newName;
+        svc.sftpRename(oldPath, newPath);
+        ok(cb, null);
     }
 
     private void pickAndUpload(String id, CefQueryCallback cb) {

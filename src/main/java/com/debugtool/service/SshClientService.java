@@ -394,6 +394,65 @@ public class SshClientService {
         }
     }
 
+    public void sftpDelete(String remotePath) {
+        if (!connected.get() || session == null || !session.isConnected()) {
+            emit("error", "sshClient", "Not connected");
+            return;
+        }
+        ChannelSftp sftpChannel = null;
+        try {
+            sftpChannel = (ChannelSftp) session.openChannel("sftp");
+            sftpChannel.connect(5000);
+            deleteRecursive(sftpChannel, remotePath);
+            emit("sftpDeleted", "sshClient", remotePath);
+            sftpList(sftpCurrentDir);
+        } catch (Exception e) {
+            emit("error", "sshClient", "SFTP delete failed: " + e.getMessage());
+        } finally {
+            if (sftpChannel != null && sftpChannel.isConnected()) {
+                sftpChannel.disconnect();
+            }
+        }
+    }
+
+    private void deleteRecursive(ChannelSftp sftp, String path) throws Exception {
+        SftpATTRS attrs = sftp.stat(path);
+        if (attrs.isDir()) {
+            @SuppressWarnings("unchecked")
+            Vector<ChannelSftp.LsEntry> entries = sftp.ls(path);
+            for (ChannelSftp.LsEntry entry : entries) {
+                String name = entry.getFilename();
+                if (".".equals(name) || "..".equals(name)) continue;
+                String childPath = path.endsWith("/") ? path + name : path + "/" + name;
+                deleteRecursive(sftp, childPath);
+            }
+            sftp.rmdir(path);
+        } else {
+            sftp.rm(path);
+        }
+    }
+
+    public void sftpRename(String oldPath, String newPath) {
+        if (!connected.get() || session == null || !session.isConnected()) {
+            emit("error", "sshClient", "Not connected");
+            return;
+        }
+        ChannelSftp sftpChannel = null;
+        try {
+            sftpChannel = (ChannelSftp) session.openChannel("sftp");
+            sftpChannel.connect(5000);
+            sftpChannel.rename(oldPath, newPath);
+            emit("sftpRenamed", "sshClient", oldPath + "|" + newPath);
+            sftpList(sftpCurrentDir);
+        } catch (Exception e) {
+            emit("error", "sshClient", "SFTP rename failed: " + e.getMessage());
+        } finally {
+            if (sftpChannel != null && sftpChannel.isConnected()) {
+                sftpChannel.disconnect();
+            }
+        }
+    }
+
     public String getStatusJson() {
         JsonObject obj = new JsonObject();
         obj.addProperty("connected", connected.get());

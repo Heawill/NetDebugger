@@ -201,6 +201,13 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
 .sftp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sftp-size { font-size: 10px; color: var(--text-secondary); flex-shrink: 0; min-width: 50px; text-align: right; }
 .sftp-dl-dir { font-size: 10px; color: var(--text-secondary); cursor: default; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sftp-context-menu { position: fixed; z-index: 9999; background: var(--dropdown-bg, #fff); border: 1px solid var(--border-color); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 4px 0; min-width: 130px; }
+.sftp-context-menu .ctx-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; color: var(--text-primary); transition: background 0.15s; }
+.sftp-context-menu .ctx-item:hover { background: var(--dropdown-hover, #f0f0f0); }
+.sftp-context-menu .ctx-item.ctx-danger { color: var(--accent-red, #e74c3c); }
+.sftp-context-menu .ctx-item .ctx-icon { font-size: 14px; width: 16px; text-align: center; flex-shrink: 0; }
+.sftp-context-menu .ctx-separator { height: 1px; background: var(--border-color); margin: 2px 6px; }
+.sftp-item.ctx-active { background: var(--dropdown-hover); }
 .has-downloads { animation: pulse 1.5s infinite; color: var(--accent-cyan) !important; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 @keyframes spin { from {transform:rotate(0deg)} to {transform:rotate(360deg)} }
@@ -309,11 +316,12 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
                   <div v-if="!sshActiveSession.sftpFiles || sshActiveSession.sftpFiles.length===0" class="log-empty" style="padding:10px;">{{ $t('noMessages') }}</div>
                   <div v-for="f in sshActiveSession.sftpFiles" :key="f.name"
                        :class="['sftp-item', { 'sftp-dir': f.isDir }]"
-                       :title="f.isDir ? $t('sftpOpenDir') : $t('sftpDownload')">
+                       :title="f.isDir ? $t('sftpOpenDir') : $t('sftpDownload')"
+                       @contextmenu.prevent="showSftpContextMenu($event, sshActiveSession, f)">
                     <span class="sftp-icon">{{ f.isDir ? '📁' : '📄' }}</span>
                     <span class="sftp-name" @dblclick="f.isDir && navigateSftp(sshActiveSession, f.name)">{{ f.name }}</span>
                     <span class="sftp-size">{{ f.isDir ? '' : formatSize(f.size) }}</span>
-                    <el-button v-if="!f.isDir" size="mini" type="text" @click="downloadSftpFile(sshActiveSession, f)" style="color:var(--accent-cyan);padding:0 4px;" :title="$t('sftpDownload')">⬇</el-button>
+<!--                    <el-button v-if="!f.isDir" size="mini" type="text" @click="downloadSftpFile(sshActiveSession, f)" style="color:var(&#45;&#45;accent-cyan);padding:0 4px;" :title="$t('sftpDownload')">⬇</el-button>-->
                   </div>
                 </div>
                 <!-- Inline download progress -->
@@ -330,6 +338,19 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
                       </div>
                     </div>
                     <div v-else><span :style="{color:dl.status==='done'?'var(--accent-green)':'var(--accent-red)',fontSize:'10px'}">{{ dl.status === 'done' ? $t('sftpDlDone') : $t('sftpDlFail') }}</span></div>
+                  </div>
+                </div>
+                <!-- SFTP Context Menu -->
+                <div class="sftp-context-menu" v-show="sftpContextMenu.visible" :style="{ left: sftpContextMenu.x + 'px', top: sftpContextMenu.y + 'px' }" @click.stop>
+                  <div v-if="sftpContextMenu.file && !sftpContextMenu.file.isDir" class="ctx-item" @click="downloadFromContextMenu">
+                    <span class="ctx-icon">⬇</span><span>{{ $t('sftpDownload') }}</span>
+                  </div>
+                  <div class="ctx-item" @click="renameFromContextMenu">
+                    <span class="ctx-icon">✏️</span><span>{{ $t('sftpRename') }}</span>
+                  </div>
+                  <div class="ctx-separator"></div>
+                  <div class="ctx-item ctx-danger" @click="deleteFromContextMenu">
+                    <span class="ctx-icon">🗑</span><span>{{ $t('sftpDelete') }}</span>
                   </div>
                 </div>
               </div>
@@ -721,7 +742,14 @@ var i18nMessages = {
     sftpDlDone: '已完成',
     sftpDlFail: '失败',
     sftpAlreadyDling: '正在下载中，请等待完成',
-    sftpDlDirInvalid: '下载目录无效'
+    sftpDlDirInvalid: '下载目录无效',
+    // SFTP context menu
+    sftpDelete: '删除',
+    sftpDeleteConfirm: '确定要删除 {0} 吗？此操作不可撤销。',
+    sftpRename: '重命名',
+    sftpRenamePrompt: '为 {0} 输入新名称',
+    confirm: '确定',
+    cancel: '取消'
   },
   'en': {
     language: 'Language',
@@ -846,7 +874,14 @@ var i18nMessages = {
     sftpDlDone: 'Completed',
     sftpDlFail: 'Failed',
     sftpAlreadyDling: 'is already downloading',
-    sftpDlDirInvalid: 'Invalid download directory'
+    sftpDlDirInvalid: 'Invalid download directory',
+    // SFTP context menu
+    sftpDelete: 'Delete',
+    sftpDeleteConfirm: 'Are you sure you want to delete {0}? This cannot be undone.',
+    sftpRename: 'Rename',
+    sftpRenamePrompt: 'Enter new name for {0}',
+    confirm: 'OK',
+    cancel: 'Cancel'
   }
 };
 
@@ -897,6 +932,7 @@ new Vue({
     udpCliSessions: [], udpCliActiveId: null,
     sshSessions: [], sshActiveId: null,
     downloads: [],
+    sftpContextMenu: { visible: false, x: 0, y: 0, session: null, file: null },
     theme: 'auto',
     lang: currentLocale
   },
@@ -1426,6 +1462,56 @@ new Vue({
         }
       } catch(e) {}
     },
+    // ==================== SFTP Context Menu ====================
+    showSftpContextMenu(e, session, file) {
+      this.sftpContextMenu.visible = true;
+      this.sftpContextMenu.x = e.clientX;
+      this.sftpContextMenu.y = e.clientY;
+      this.sftpContextMenu.session = session;
+      this.sftpContextMenu.file = file;
+    },
+    hideSftpContextMenu() {
+      this.sftpContextMenu.visible = false;
+    },
+    downloadFromContextMenu() {
+      var ctx = this.sftpContextMenu;
+      if (ctx.file && ctx.session && !ctx.file.isDir) {
+        this.downloadSftpFile(ctx.session, ctx.file);
+      }
+      this.hideSftpContextMenu();
+    },
+    deleteFromContextMenu() {
+      var ctx = this.sftpContextMenu;
+      if (!ctx.file || !ctx.session) return;
+      var self = this;
+      var fileName = ctx.file.name;
+      this.$confirm(
+        (this.$t('sftpDeleteConfirm') || '确认删除').replace('{0}', fileName),
+        this.$t('sftpDelete') || '删除',
+        { confirmButtonText: this.$t('confirm') || '确定', cancelButtonText: this.$t('cancel') || '取消', type: 'warning' }
+      ).then(function() {
+        var remotePath = (ctx.session.sftpPath || '/') + (ctx.session.sftpPath === '/' ? '' : '/') + fileName;
+        callJava('sftpDelete', ctx.session.id, remotePath);
+      }).catch(function() {});
+      this.hideSftpContextMenu();
+    },
+    renameFromContextMenu() {
+      var ctx = this.sftpContextMenu;
+      if (!ctx.file || !ctx.session) return;
+      var self = this;
+      var oldName = ctx.file.name;
+      this.$prompt(
+        (this.$t('sftpRenamePrompt') || '输入新名称').replace('{0}', oldName),
+        this.$t('sftpRename') || '重命名',
+        { confirmButtonText: this.$t('confirm') || '确定', cancelButtonText: this.$t('cancel') || '取消', inputValue: oldName }
+      ).then(function(result) {
+        var newName = (result && result.value) ? result.value.trim() : '';
+        if (!newName || newName === oldName) return;
+        var oldPath = (ctx.session.sftpPath || '/') + (ctx.session.sftpPath === '/' ? '' : '/') + oldName;
+        callJava('sftpRename', ctx.session.id, oldPath, newName);
+      }).catch(function() {});
+      this.hideSftpContextMenu();
+    },
     formatSize(bytes) {
       if (!bytes || bytes === 0) return '0 B';
       var units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -1632,6 +1718,9 @@ new Vue({
       if (resizing) { resizing = false; callJava('windowResizeEnd'); document.body.style.cursor = 'default'; document.body.releasePointerCapture(e.pointerId); }
     };
     document.addEventListener('pointerup', endResize);
+
+    // --- Hide SFTP context menu on global click ---
+    document.addEventListener('click', function() { self.sftpContextMenu.visible = false; });
   },
   updated: function() {
     this.$nextTick(function() { this.resizeTextareas(); });

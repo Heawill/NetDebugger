@@ -37,8 +37,8 @@ import com.sun.net.httpserver.HttpExchange;
 public class App {
 
     private static String APP_TITLE = "NetDebugger";
-    private static final int WIDTH = 1280;
-    private static final int HEIGHT = 860;
+    private static final int WIDTH = 1600;
+    private static final int HEIGHT = 900;
 
     private JSBridgeHandler bridgeHandler;
     private PersistenceService persistenceService;
@@ -46,6 +46,7 @@ public class App {
     private CefClient cefClient;
     private CefBrowser cefBrowser;
     private JFrame frame;
+    private JPanel wrapper;
     private HttpServer httpServer;
 
     // Window drag state
@@ -79,7 +80,7 @@ public class App {
             frame.setUndecorated(true);
             frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
             frame.setSize(WIDTH, HEIGHT);
-            frame.setMinimumSize(new Dimension(1700, 1000));
+            frame.setMinimumSize(new Dimension(1280, 860));
             frame.setLocationRelativeTo(null);
             frame.setLayout(new BorderLayout());
 
@@ -176,11 +177,18 @@ public class App {
         Component ui = cefBrowser.getUIComponent();
         ui.setPreferredSize(new Dimension(WIDTH, HEIGHT));
         // Wrap in a panel with an AWT border so it never disappears during resize
-        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper = new JPanel(new BorderLayout());
         wrapper.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1));
         wrapper.add(ui, BorderLayout.CENTER);
         frame.add(wrapper, BorderLayout.CENTER);
         frame.revalidate();
+
+        // Set initial border color based on persisted theme
+        Map<String, String> savedCfg = persistenceService.loadConfig();
+        updateThemeBorder(savedCfg.getOrDefault("theme", "auto"));
+
+        // Listen for theme changes from frontend
+        bridgeHandler.setThemeCallback(this::updateThemeBorder);
     }
 
     // ==================== HTTP Server (proper UTF-8 encoding) ====================
@@ -449,6 +457,17 @@ public class App {
             System.err.println("[NetDebugger] Warning: native path injection failed. "
                 + "Use -Djava.library.path=./runtimes/windows-amd64 as fallback.");
         }
+    }
+
+    private void updateThemeBorder(String theme) {
+        if (wrapper == null) return;
+        SwingUtilities.invokeLater(() -> {
+            if ("dark".equals(theme)) {
+                wrapper.setBorder(BorderFactory.createLineBorder(new Color(42, 165, 255), 2));
+            } else {
+                wrapper.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1));
+            }
+        });
     }
 
     // ==================== Shutdown ====================

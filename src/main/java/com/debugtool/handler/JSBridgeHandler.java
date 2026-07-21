@@ -27,9 +27,11 @@ public class JSBridgeHandler {
 
     private PersistenceService persistence;
     private volatile boolean restored = false;
+    private java.util.function.Consumer<String> themeCallback;
 
     public void setBrowser(CefBrowser b) { this.browser = b; }
     public void setPersistence(PersistenceService p) { this.persistence = p; }
+    public void setThemeCallback(java.util.function.Consumer<String> cb) { this.themeCallback = cb; }
 
     public void handleCefQuery(String reqJson, CefQueryCallback cb) {
         try {
@@ -272,6 +274,9 @@ public class JSBridgeHandler {
             Map<String, String> config = persistence.loadConfig();
             config.put(key, value);
             persistence.saveConfig(config);
+            if ("theme".equals(key) && themeCallback != null) {
+                themeCallback.accept(value);
+            }
             ok(cb, "ok");
         } catch (Exception e) {
             if (cb != null) cb.failure(-1, "persistConfig: " + e.getMessage());

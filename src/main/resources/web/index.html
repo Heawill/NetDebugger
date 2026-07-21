@@ -181,6 +181,29 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
 .ssh-config-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .ssh-config-row > div { flex: 1; min-width: 120px; }
 .ssh-config-row label { font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 2px; }
+
+.sftp-card { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.sftp-toolbar { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+.sftp-path { flex: 1; font-size: 11px; font-family: monospace; color: var(--accent-cyan); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sftp-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+.sftp-actions .el-button { padding: 4px; border-radius: 4px; min-width: 22px; }
+.sftp-actions .el-button img { display: block; }
+.sftp-upload-btn { position: relative; overflow: hidden; }
+.sftp-upload-btn input { position: absolute; left: 0; top: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.sftp-upload-btn:hover { color: var(--accent-cyan); background: var(--dropdown-hover); }
+.sftp-list { flex: 1; overflow-y: auto; font-size: 12px; }
+.sftp-list::-webkit-scrollbar { width: 4px; }
+.sftp-list::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+.sftp-item { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 4px; cursor: default; }
+.sftp-item:hover { background: var(--log-hover); }
+.sftp-item.sftp-dir { cursor: pointer; }
+.sftp-icon { font-size: 14px; flex-shrink: 0; width: 20px; text-align: center; }
+.sftp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sftp-size { font-size: 10px; color: var(--text-secondary); flex-shrink: 0; min-width: 50px; text-align: right; }
+.sftp-dl-dir { font-size: 10px; color: var(--text-secondary); cursor: default; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.has-downloads { animation: pulse 1.5s infinite; color: var(--accent-cyan) !important; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+@keyframes spin { from {transform:rotate(0deg)} to {transform:rotate(360deg)} }
 </style>
 </head>
 <body>
@@ -251,7 +274,7 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
                 </div>
                 <div class="ssh-config-row" style="margin-top:8px;">
                   <div><label>{{ $t('username') }}</label><el-input v-model="sshActiveSession.username" size="small" placeholder="root"></el-input></div>
-                  <div><label>{{ $t('password') }}</label><el-input v-model="sshActiveSession.password" size="small" type="password" show-password placeholder="······"></el-input></div>
+                  <div><label>{{ $t('password') }}</label><el-input v-model="sshActiveSession.password" size="small" type="password" show-password placeholder=""></el-input></div>
                 </div>
                 <div style="margin-top:10px;">
                   <el-button v-if="!sshActiveSession.connected" class="btn-start" size="small" @click="connectSsh(sshActiveSession)" :loading="sshActiveSession.loading" style="width:100%;">{{ $t('connect') }}</el-button>
@@ -260,6 +283,54 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
                 <div class="stats-bar">
                   <span class="stat-item">{{ $t('status') }}：<span class="stat-value" :style="{color:sshActiveSession.connected?'var(--accent-green)':'var(--text-secondary)'}">{{ sshActiveSession.connected ? $t('connected') : $t('disconnected') }}</span></span>
                   <span class="stat-item" v-if="sshActiveSession.connected">{{ $t('peer') }}：<span class="stat-value">{{ sshActiveSession.host }}:{{ sshActiveSession.port }}</span></span>
+                </div>
+              </div>
+              <!-- SFTP Panel -->
+              <div class="card sftp-card" v-if="sshActiveSession.connected">
+                <div class="card-title" style="display:flex;align-items:center;">
+                  <span>{{ $t('sftpTitle') }}</span>
+                  <div class="sftp-actions">
+                    <el-button size="mini" type="text" class="sftp-upload-btn" @click="navigateSftp(sshActiveSession, '..')" :title="$t('sftpUp')"><img src="img/back.svg" width="14" height="14"/></el-button>
+                    <el-button size="mini" type="text" class="sftp-upload-btn" @click="refreshSftp(sshActiveSession)" :title="$t('refresh')">
+                      <img src="img/refresh.svg" width="14" height="14" :style="{animation:sshActiveSession.sftpLoading?'spin 1s linear infinite':'none'}"/>
+                    </el-button>
+                    <el-button size="mini" type="text" :title="$t('sftpUpload')" @click="startUpload(sshActiveSession)"><img src="img/upload.svg" width="14" height="14"/></el-button>
+                    <el-button size="mini" type="text" :title="$t('sftpDlDirSet')" @click="toggleDlSettings(sshActiveSession)"><img src="img/settings.svg" width="14" height="14"/></el-button>
+                  </div>
+                </div>
+                <div v-if="sshActiveSession._showDlSettings" style="padding:6px 10px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;gap:8px;font-size:12px;">
+                  <span style="color:var(--text-secondary);flex-shrink:0;">{{ $t('sftpDlDir') }}</span>
+                  <el-input size="mini" v-model="sshActiveSession.dlDir" placeholder="~/Downloads" style="flex:1;"></el-input>
+                </div>
+                <div class="sftp-toolbar">
+                  <span class="sftp-path">{{ sshActiveSession.sftpPath || '/' }}</span>
+                </div>
+                <div class="sftp-list">
+                  <div v-if="!sshActiveSession.sftpFiles || sshActiveSession.sftpFiles.length===0" class="log-empty" style="padding:10px;">{{ $t('noMessages') }}</div>
+                  <div v-for="f in sshActiveSession.sftpFiles" :key="f.name"
+                       :class="['sftp-item', { 'sftp-dir': f.isDir }]"
+                       :title="f.isDir ? $t('sftpOpenDir') : $t('sftpDownload')">
+                    <span class="sftp-icon">{{ f.isDir ? '📁' : '📄' }}</span>
+                    <span class="sftp-name" @dblclick="f.isDir && navigateSftp(sshActiveSession, f.name)">{{ f.name }}</span>
+                    <span class="sftp-size">{{ f.isDir ? '' : formatSize(f.size) }}</span>
+                    <el-button v-if="!f.isDir" size="mini" type="text" @click="downloadSftpFile(sshActiveSession, f)" style="color:var(--accent-cyan);padding:0 4px;" :title="$t('sftpDownload')">⬇</el-button>
+                  </div>
+                </div>
+                <!-- Inline download progress -->
+                <div v-if="downloads.length>0" style="border-top:1px solid var(--border-color);padding:6px 0 0 0;max-height:120px;overflow-y:auto;">
+                  <div v-for="dl in downloads" :key="dl.id" style="font-size:12px;padding:3px 0;">
+                    <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ dl.name }}</span><span style="color:var(--accent-cyan);flex-shrink:0;margin-left:4px;">{{ formatSize(dl.size) }}</span></div>
+                    <div v-if="dl.status==='active'" style="margin-top:2px;">
+                      <div style="height:4px;background:var(--border-color);border-radius:2px;overflow:hidden;">
+                        <div :style="{width:(dl.progress||0)+'%',height:'100%',background:'linear-gradient(90deg,var(--accent-cyan),var(--accent-green))',transition:'width 0.3s',borderRadius:'2px'}"></div>
+                      </div>
+                      <div style="display:flex;justify-content:space-between;margin-top:1px;font-size:10px;color:var(--text-secondary);">
+                        <span>{{ dl.progress || 0 }}%</span>
+                        <span>{{ formatSize(dl.transferred||0) }} / {{ formatSize(dl.total) }}</span>
+                      </div>
+                    </div>
+                    <div v-else><span :style="{color:dl.status==='done'?'var(--accent-green)':'var(--accent-red)',fontSize:'10px'}">{{ dl.status === 'done' ? $t('sftpDlDone') : $t('sftpDlFail') }}</span></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -634,7 +705,23 @@ var i18nMessages = {
     'ssh.client.disconnected': 'SSH 已断开',
     'ssh.client.connection_failed': 'SSH 连接失败: {0}',
     'ssh.client.connection_lost': 'SSH 连接丢失: {0}',
-    'ssh.client.send_failed': 'SSH 发送失败: {0}'
+    'ssh.client.send_failed': 'SSH 发送失败: {0}',
+    // SFTP
+    sftpTitle: 'SFTP 文件管理',
+    sftpOpenDir: '双击进入目录',
+    sftpDownload: '下载文件',
+    sftpUpload: '上传文件',
+    sftpUp: '上级目录',
+    refresh: '刷新',
+    sftpDlDir: '下载目录',
+    sftpDlDirSet: '设置下载目录',
+    sftpDlProgress: '下载进度',
+    sftpNoDl: '暂无下载任务',
+    sftpDling: '下载中...',
+    sftpDlDone: '已完成',
+    sftpDlFail: '失败',
+    sftpAlreadyDling: '正在下载中，请等待完成',
+    sftpDlDirInvalid: '下载目录无效'
   },
   'en': {
     language: 'Language',
@@ -743,7 +830,23 @@ var i18nMessages = {
     'ssh.client.disconnected': 'SSH disconnected',
     'ssh.client.connection_failed': 'SSH connection failed: {0}',
     'ssh.client.connection_lost': 'SSH connection lost: {0}',
-    'ssh.client.send_failed': 'SSH send failed: {0}'
+    'ssh.client.send_failed': 'SSH send failed: {0}',
+    // SFTP
+    sftpTitle: 'SFTP File Manager',
+    sftpOpenDir: 'Double-click to enter',
+    sftpDownload: 'Download file',
+    sftpUpload: 'Upload file',
+    sftpUp: 'Parent directory',
+    refresh: 'Refresh',
+    sftpDlDir: 'Download Dir',
+    sftpDlDirSet: 'Set download directory',
+    sftpDlProgress: 'Download Progress',
+    sftpNoDl: 'No downloads',
+    sftpDling: 'Downloading...',
+    sftpDlDone: 'Completed',
+    sftpDlFail: 'Failed',
+    sftpAlreadyDling: 'is already downloading',
+    sftpDlDirInvalid: 'Invalid download directory'
   }
 };
 
@@ -771,6 +874,18 @@ function makeSession(prefix, extras) {
   return Object.assign(s, extras);
 }
 
+// Byte array search helper
+function indexOfBytes(haystack, needle) {
+  for (var i = 0; i <= haystack.length - needle.length; i++) {
+    var found = true;
+    for (var j = 0; j < needle.length; j++) {
+      if (haystack[i + j] !== needle[j]) { found = false; break; }
+    }
+    if (found) return i;
+  }
+  return -1;
+}
+
 new Vue({
   el: '#app',
   data: {
@@ -781,6 +896,7 @@ new Vue({
     udpSessions: [], udpActiveId: null,
     udpCliSessions: [], udpCliActiveId: null,
     sshSessions: [], sshActiveId: null,
+    downloads: [],
     theme: 'auto',
     lang: currentLocale
   },
@@ -982,12 +1098,18 @@ new Vue({
         case 'clientList': try { var arr=JSON.parse(data); this.$set(s,'clients',arr); } catch(ex){ console.error('[NetDebugger] clientList parse:', ex, data); } break;
         case 'clientConnected': break;
         case 'clientDisconnected': var idx2=s.clients.indexOf(data); if(idx2>=0) s.clients.splice(idx2,1); break;
-        case 'connected': s.connected=true; s.loading=false; if (this.sshSessions.indexOf(s) >= 0 && s.id === this.sshActiveId && this.activeTab === 'sshClient') { this.initSshTerminal(s); } break;
+        case 'connected': s.connected=true; s.loading=false; if (this.sshSessions.indexOf(s) >= 0) { if (s.id === this.sshActiveId && this.activeTab === 'sshClient') { this.initSshTerminal(s); } this.refreshSftp(s); } break;
         case 'disconnected': s.connected=false; if (this.sshSessions.indexOf(s) >= 0) { this.destroySshTerminal(s); } break;
         case 'bound': s.bound=true; s.loading=false; break;
         case 'unbound': s.bound=false; break;
         case 'error': this.$message.error('['+id+'] '+data); s.loading=false; break;
         case 'terminalData': this.handleTerminalData(s, data); break;
+        case 'sftpList': this.handleSftpList(s, data); break;
+        case 'sftpFileData': this.handleSftpFileData(s, data); break;
+        case 'sftpUploaded': this.finishUpload(); this.refreshSftp(s); break;
+        case 'sftpProgress': this.handleSftpProgress(data); break;
+        case 'uploadCancelled': this.cancelUpload(); break;
+        case 'sftpPwd': this.handleSftpPwd(s, data); break;
       }
     },
     findSession: function(id) {
@@ -1019,7 +1141,7 @@ new Vue({
     addTcpClient() { var s = makeSession('cli-', {host:'127.0.0.1', port:8888, connected:false}); this.tcpCliSessions.push(s); this.tcpCliActiveId=s.id; callJava('createTcpClient', s.id); this.saveAllSessions(); },
     addUdpServer() { var s = makeSession('udpSrv-', {port:9999, running:false, sendHost:'127.0.0.1', sendPort:9999, clients:[], targetClient:''}); this.udpSessions.push(s); this.udpActiveId=s.id; callJava('createUdpServer', s.id); this.saveAllSessions(); },
     addUdpClient() { var s = makeSession('udpCli-', {port:10000, bound:false, sendHost:'127.0.0.1', sendPort:9999}); this.udpCliSessions.push(s); this.udpCliActiveId=s.id; callJava('createUdpClient', s.id); this.saveAllSessions(); },
-    addSshClient() { var s = makeSession('ssh-', {host:'192.168.1.1', port:22, username:'root', password:'', connected:false, terminal:null, fitAddon:null}); this.sshSessions.push(s); this.sshActiveId=s.id; callJava('createSshClient', s.id); this.saveAllSessions(); },
+    addSshClient() { var s = makeSession('ssh-', {host:'192.168.1.1', port:22, username:'root', password:'', connected:false, terminal:null, fitAddon:null, sftpPath:'/', sftpFiles:[], sftpLoading:false, dlDir:'', _showDlSettings:false}); this.sshSessions.push(s); this.sshActiveId=s.id; callJava('createSshClient', s.id); this.saveAllSessions(); },
 
     connectSsh(s) {
       var self = this;
@@ -1037,7 +1159,32 @@ new Vue({
         var binaryStr = atob(base64Data);
         var bytes = new Uint8Array(binaryStr.length);
         for (var i = 0; i < binaryStr.length; i++) { bytes[i] = binaryStr.charCodeAt(i); }
-        s.terminal.write(bytes);
+
+        // Intercept OSC 777 pwd sync: \x1b]777;pwd;PATH\x07
+        var marker = [0x1B, 0x5D, 0x37, 0x37, 0x37, 0x3B, 0x70, 0x77, 0x64, 0x3B]; // ESC]777;pwd;
+        var idx = indexOfBytes(bytes, marker);
+        if (idx >= 0) {
+          var start = idx + marker.length;
+          var end = start;
+          while (end < bytes.length && bytes[end] !== 0x07) end++;
+          if (end > start) {
+            var pathBytes = bytes.slice(start, end);
+            var path = new TextDecoder().decode(pathBytes);
+            if (path.startsWith('/')) {
+              this.$set(s, 'sftpPath', path);
+              this.$nextTick(function() { this.refreshSftp(s); }.bind(this));
+            }
+          }
+          // Strip the OSC sequence from output
+          var before = bytes.slice(0, idx);
+          var after = bytes.slice(end + 1);
+          var filtered = new Uint8Array(before.length + after.length);
+          filtered.set(before);
+          filtered.set(after, before.length);
+          bytes = filtered;
+        }
+
+        if (bytes.length > 0) s.terminal.write(bytes);
       } catch(e) { console.error('[NetDebugger] terminalData error:', e); }
     },
     initSshTerminal(s) {
@@ -1100,6 +1247,162 @@ new Vue({
     destroySshTerminal(s) {
       if (s._resizeObserver) { s._resizeObserver.disconnect(); s._resizeObserver = null; }
       if (s.terminal) { s.terminal.dispose(); s.terminal = null; s.fitAddon = null; }
+    },
+
+    // ==================== SFTP ====================
+    refreshSftp(s) {
+      s.sftpLoading = true;
+      callJava('sftpList', s.id, s.sftpPath || '/');
+    },
+    navigateSftp(s, dir) {
+      if (!s.sftpPath) s.sftpPath = '/';
+      if (dir === '..') {
+        if (s.sftpPath === '/') return;
+        s.sftpPath = s.sftpPath.substring(0, s.sftpPath.lastIndexOf('/')) || '/';
+      } else {
+        s.sftpPath = (s.sftpPath === '/' ? '/' + dir : s.sftpPath + '/' + dir);
+      }
+      this.refreshSftp(s);
+    },
+    downloadSftpFile(s, file) {
+      // Check if already downloading
+      var existing = this.downloads.find(function(d){return d.name===file.name && d.status==='active';});
+      if (existing) {
+        this.$message.warning(file.name + ' ' + (this.$t('sftpAlreadyDling') || 'is already downloading'));
+        return;
+      }
+      var dlDir = s.dlDir || '';
+      if (dlDir && !/^(\/|[A-Za-z]:\\|~)/.test(dlDir)) {
+        this.$message.warning((this.$t('sftpDlDirInvalid') || 'Invalid download directory') + ': ' + dlDir);
+        return;
+      }
+      var dlId = file.name + '_' + Date.now();
+      this.downloads.unshift({ id: dlId, name: file.name, size: file.size, status: 'active', progress: 0, total: 0, transferred: 0 });
+      callJava('sftpDownload', s.id, (s.sftpPath || '/') + (s.sftpPath === '/' ? '' : '/') + file.name, s.dlDir || '');
+      s._pendingDlId = dlId;
+    },
+    startUpload(s) {
+      var dlId = 'up_' + Date.now();
+      this.downloads.unshift({ id: dlId, name: 'Upload...', size: 0, status: 'active', progress: 0, total: 0, transferred: 0 });
+      callJava('pickAndUpload', s.id);
+    },
+    finishUpload() {
+      var dl = this.downloads.find(function(d){return d.status==='active';});
+      if (dl) dl.status = 'done';
+      var self = this;
+      setTimeout(function() {
+        var idx = -1;
+        self.downloads.forEach(function(d,i){ if(d.status==='done') idx=i; });
+        if (idx>=0) self.downloads.splice(idx,1);
+      }, 5000);
+    },
+    cancelUpload() {
+      var idx = -1;
+      this.downloads.forEach(function(d,i){ if(d.status==='active') idx=i; });
+      if (idx>=0) this.downloads.splice(idx,1);
+    },
+    uploadSftpFile(s, event) {
+      var file = event.target.files[0];
+      if (!file) return;
+      var dlId = file.name + '_up_' + Date.now();
+      this.downloads.unshift({ id: dlId, name: file.name, size: file.size, status: 'active', progress: 0, total: file.size, transferred: 0 });
+      var self = this;
+      // Use XHR to upload directly to Java HTTP endpoint (non-blocking)
+      var url = window.location.origin + '/upload/' + encodeURIComponent(s.id) + '/' + encodeURIComponent(file.name);
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', url, true);
+      xhr.onload = function() {
+        if (xhr.status === 200) {
+          var dl = self.downloads.find(function(d){return d.id===dlId;});
+          if (dl) dl.status = 'done';
+          self.refreshSftp(s);
+        } else {
+          var dl = self.downloads.find(function(d){return d.id===dlId;});
+          if (dl) dl.status = 'fail';
+        }
+      };
+      xhr.onerror = function() {
+        var dl = self.downloads.find(function(d){return d.id===dlId;});
+        if (dl) dl.status = 'fail';
+      };
+      xhr.send(file);
+      event.target.value = '';
+      setTimeout(function() {
+        var idx = -1;
+        self.downloads.forEach(function(d,i){ if(d.id===dlId) idx=i; });
+        if (idx>=0) self.downloads.splice(idx,1);
+      }, 8000);
+    },
+    toggleDlSettings(s) {
+      this.$set(s, '_showDlSettings', !s._showDlSettings);
+    },
+    handleSftpList(s, data) {
+      s.sftpLoading = false;
+      try {
+        var result = typeof data === 'string' ? JSON.parse(data) : data;
+        var files = result.files || [];
+        // Sort: directories first, then by name
+        files.sort(function(a, b) {
+          if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+        this.$set(s, 'sftpFiles', files);
+        this.$set(s, 'sftpPath', result.path);
+      } catch(e) { console.error('[NetDebugger] sftpList parse:', e); }
+    },
+    handleSftpPwd(s, data) {
+      var path = typeof data === 'string' ? data : (data.path || data);
+      if (path && path.startsWith('/')) {
+        this.$set(s, 'sftpPath', path);
+        this.refreshSftp(s);
+      }
+    },
+    handleSftpFileData(s, data) {
+      try {
+        var result = typeof data === 'string' ? JSON.parse(data) : data;
+        // Find the pending download entry (added in downloadSftpFile) and mark done
+        var dl = this.downloads.find(function(d){return d.status==='active' && d.name===result.name;});
+        if (dl) {
+          this.$set(dl, 'status', 'done');
+          this.$set(dl, 'size', result.size);
+          setTimeout(function() {
+            var idx = -1;
+            this.downloads.forEach(function(d,i){ if(d.id===dl.id) idx=i; });
+            if (idx>=0) this.downloads.splice(idx,1);
+          }.bind(this), 5000);
+        } else {
+          // Fallback: no pending entry found (shouldn't happen with the new flow)
+          var dlId = result.name + '_' + Date.now();
+          this.downloads.unshift({ id: dlId, name: result.name, size: result.size, status: 'done' });
+          setTimeout(function() {
+            var idx = -1;
+            this.downloads.forEach(function(d,i){ if(d.id===dlId) idx=i; });
+            if (idx>=0) this.downloads.splice(idx,1);
+          }.bind(this), 5000);
+        }
+      } catch(e) {
+        console.error('[NetDebugger] sftpFileData:', e);
+      }
+    },
+    handleSftpProgress(data) {
+      try {
+        var p = typeof data === 'string' ? JSON.parse(data) : data;
+        var dl = this.downloads.find(function(d){return d.name===p.name && d.status==='active';});
+        if (!dl) dl = this.downloads.find(function(d){return d.name==='Upload...' && d.status==='active';});
+        if (dl) {
+          this.$set(dl, 'name', p.name);
+          this.$set(dl, 'total', p.total);
+          this.$set(dl, 'transferred', p.transferred);
+          this.$set(dl, 'size', p.total > 0 ? p.total : dl.size);
+          this.$set(dl, 'progress', p.total > 0 ? Math.round(p.transferred * 100 / p.total) : 0);
+        }
+      } catch(e) {}
+    },
+    formatSize(bytes) {
+      if (!bytes || bytes === 0) return '0 B';
+      var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      var i = Math.floor(Math.log(bytes) / Math.log(1024));
+      return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
     },
 
     startTcpServer(s) { s.loading=true; callJava('startTcpServer', s.id, s.port, s.maxConn); },
@@ -1193,7 +1496,7 @@ new Vue({
             if (!self.udpCliActiveId) self.udpCliActiveId = s.id;
             callJava('createUdpClient', s.id);
           } else if (s.type === 'sshClient') {
-            var sess = makeSession('ssh-', {host: s.host || '192.168.1.1', port: s.port || 22, username: s.username || 'root', password: s.password || '', connected: false, terminal: null, fitAddon: null, logs: logs});
+            var sess = makeSession('ssh-', {host: s.host || '192.168.1.1', port: s.port || 22, username: s.username || 'root', password: s.password || '', connected: false, terminal: null, fitAddon: null, sftpPath:'/', sftpFiles:[], sftpLoading:false, logs: logs});
             sess.id = s.id;
             self.sshSessions.push(sess);
             if (!self.sshActiveId) self.sshActiveId = s.id;

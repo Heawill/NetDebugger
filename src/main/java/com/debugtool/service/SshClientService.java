@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import com.jcraft.jsch.*;
 
 import java.io.*;
+import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -35,13 +36,14 @@ public class SshClientService {
     private int cols = 80;
     private int rows = 24;
 
+    private static int httpPort = 0;
+
+    public static void setHttpPort(int port) { httpPort = port; }
+
     public SshClientService(Consumer<String> onEvent) {
         this.onEvent = onEvent;
     }
 
-    /**
-     * Connect to SSH server and open a shell channel.
-     */
     public synchronized void connect(String host, int port, String username, String password, int cols, int rows) {
         if (connected.get()) {
             disconnect();
@@ -58,7 +60,6 @@ public class SshClientService {
             session = jsch.getSession(username, host, port);
             session.setPassword(password);
 
-            // Disable strict host key checking for convenience
             Properties config = new Properties();
             config.put("StrictHostKeyChecking", "no");
             session.setConfig(config);
@@ -75,12 +76,19 @@ public class SshClientService {
 
             channel.connect(5000);
 
+            // Inject PROMPT_COMMAND for SFTP path sync
+            try {
+                String hook = "export PROMPT_COMMAND='[[ $PWD != $_ND_PWD ]] && { printf \"\\033]777;pwd;${PWD}\\007\"; _ND_PWD=$PWD; }'\n";
+                channelOut.write(hook.getBytes("UTF-8"));
+                channelOut.flush();
+                Thread.sleep(100);
+            } catch (Exception ignored) {}
+
             connected.set(true);
             logSystem(I18n.get("ssh.client.connected", host, port), "system", "ssh.client.connected",
                 String.valueOf(host), String.valueOf(port));
             emit("connected", "sshClient", null);
 
-            // Start read thread
             readThread = new Thread(() -> {
                 byte[] buffer = new byte[8192];
                 int bytesRead;
@@ -88,7 +96,6 @@ public class SshClientService {
                     while (connected.get() && (bytesRead = channelIn.read(buffer)) != -1) {
                         if (bytesRead > 0) {
                             byte[] data = Arrays.copyOf(buffer, bytesRead);
-                            // Push terminal data to frontend
                             emit("terminalData", "sshClient",
                                 Base64.getEncoder().encodeToString(data));
                         }
@@ -127,9 +134,6 @@ public class SshClientService {
         connect(host, port, username, password, cols, rows);
     }
 
-    /**
-     * Send terminal input (keystrokes) to the SSH shell.
-     */
     public void sendTerminalData(byte[] data) {
         if (!connected.get() || channelOut == null) return;
         try {
@@ -141,17 +145,11 @@ public class SshClientService {
         }
     }
 
-    /**
-     * Send terminal input from base64-encoded string.
-     */
     public void sendTerminalData(String base64Data) {
         byte[] data = Base64.getDecoder().decode(base64Data);
         sendTerminalData(data);
     }
 
-    /**
-     * Resize the PTY when the terminal is resized.
-     */
     public void resizePty(int cols, int rows) {
         this.cols = cols;
         this.rows = rows;
@@ -160,13 +158,9 @@ public class SshClientService {
         }
     }
 
-    /**
-     * Disconnect the SSH session.
-     */
     public synchronized void disconnect() {
         connected.set(false);
 
-        // Close channel first to unblock read thread
         if (channel != null && channel.isConnected()) {
             channel.disconnect();
         }
@@ -193,6 +187,213 @@ public class SshClientService {
     public String getHost() { return host; }
     public int getPort() { return port; }
 
+    // ================== SFTP ==================
+
+    private String sftpCurrentDir = "/";
+
+    public void sftpList(String path) {
+        if (!connected.get() || session == null || !session.isConnected()) {
+            emit("error", "sshClient", "Not connected");
+            return;
+        }
+        ChannelSftp sftpChannel = null;
+        try {
+            sftpChannel = (ChannelSftp) session.openChannel("sftp");
+            sftpChannel.connect(5000);
+
+            if (path == null || path.isEmpty()) path = sftpCurrentDir;
+            @SuppressWarnings("unchecked")
+            Vector<ChannelSftp.LsEntry> entries = sftpChannel.ls(path);
+            JsonObject result = new JsonObject();
+            result.addProperty("path", path);
+
+            com.google.gson.JsonArray files = new com.google.gson.JsonArray();
+            for (ChannelSftp.LsEntry entry : entries) {
+                String name = entry.getFilename();
+                if (".".equals(name) || "..".equals(name)) continue;
+                JsonObject file = new JsonObject();
+                file.addProperty("name", name);
+                file.addProperty("isDir", entry.getAttrs().isDir());
+                file.addProperty("size", entry.getAttrs().getSize());
+                file.addProperty("mtime", entry.getAttrs().getMTime());
+                file.addProperty("permissions", entry.getAttrs().getPermissionsString());
+                files.add(file);
+            }
+            result.add("files", files);
+            sftpCurrentDir = path;
+            emit("sftpList", "sshClient", gson.toJson(result));
+
+        } catch (SftpException | JSchException e) {
+            emit("error", "sshClient", "SFTP list failed: " + e.getMessage());
+        } finally {
+            if (sftpChannel != null && sftpChannel.isConnected()) {
+                sftpChannel.disconnect();
+            }
+        }
+    }
+
+    /**
+     * Download via SFTP to temp dir, serve via HTTP. Avoids blocking UI with large Base64.
+     */
+    public void sftpDownload(String remotePath, String dlDir) {
+        if (!connected.get() || session == null || !session.isConnected()) {
+            emit("error", "sshClient", "Not connected");
+            return;
+        }
+        ChannelSftp sftpChannel = null;
+        try {
+            sftpChannel = (ChannelSftp) session.openChannel("sftp");
+            sftpChannel.connect(5000);
+
+            String fileName = remotePath.substring(remotePath.lastIndexOf('/') + 1);
+            String dir = (dlDir != null && !dlDir.isEmpty()) ? dlDir :
+                Paths.get(System.getProperty("user.home"), "Downloads").toString();
+            Path dlPath = Paths.get(dir);
+            Files.createDirectories(dlPath);
+            Path file = dlPath.resolve(fileName);
+
+            // Use progress monitor for real-time percentage
+            final String fname = fileName;
+            sftpChannel.get(remotePath, file.toString(), new SftpProgressMonitor() {
+                private long total = -1;
+                private long transferred = 0;
+                private int lastPct = -1;
+
+                @Override public void init(int op, String src, String dest, long max) {
+                    total = max;
+                    emitProgress(fname, total, 0);
+                }
+                @Override public boolean count(long bytes) {
+                    transferred += bytes;
+                    if (total > 0) {
+                        int pct = (int) (transferred * 100 / total);
+                        if (pct != lastPct) {
+                            lastPct = pct;
+                            emitProgress(fname, total, transferred);
+                        }
+                    }
+                    return true;
+                }
+                @Override public void end() {
+                    emitProgress(fname, total, total);
+                }
+            }, ChannelSftp.OVERWRITE);
+
+            JsonObject result = new JsonObject();
+            result.addProperty("name", fileName);
+            long size = Files.size(file);
+            result.addProperty("size", size);
+            result.addProperty("path", file.toString());
+            emit("sftpFileData", "sshClient", gson.toJson(result));
+
+//            new Thread(() -> {
+//                try { java.awt.Desktop.getDesktop().open(file.toFile()); }
+//                catch (Exception ignored) {}
+//            }, "SftpOpen").start();
+
+        } catch (Exception e) {
+            emit("error", "sshClient", "SFTP download failed: " + e.getMessage());
+        } finally {
+            if (sftpChannel != null && sftpChannel.isConnected()) {
+                sftpChannel.disconnect();
+            }
+        }
+    }
+
+    private void emitProgress(String fileName, long total, long transferred) {
+        JsonObject p = new JsonObject();
+        p.addProperty("name", fileName);
+        p.addProperty("total", total);
+        p.addProperty("transferred", transferred);
+        emit("sftpProgress", "sshClient", gson.toJson(p));
+    }
+
+    public void sftpUpload(String remotePath, String base64Data) {
+        if (!connected.get() || session == null || !session.isConnected()) {
+            emit("error", "sshClient", "Not connected");
+            return;
+        }
+        ChannelSftp sftpChannel = null;
+        try {
+            sftpChannel = (ChannelSftp) session.openChannel("sftp");
+            sftpChannel.connect(5000);
+
+            byte[] data = Base64.getDecoder().decode(base64Data);
+            String fileName = remotePath.substring(remotePath.lastIndexOf('/') + 1);
+            final String fname = fileName;
+            sftpChannel.put(new ByteArrayInputStream(data), remotePath, new SftpProgressMonitor() {
+                private long total = data.length;
+                private long transferred = 0;
+                private int lastPct = -1;
+                @Override public void init(int op, String src, String dest, long max) {
+                    emitProgress(fname, total, 0);
+                }
+                @Override public boolean count(long bytes) {
+                    transferred += bytes;
+                    int pct = (int)(transferred * 100 / total);
+                    if (pct != lastPct) { lastPct = pct; emitProgress(fname, total, transferred); }
+                    return true;
+                }
+                @Override public void end() { emitProgress(fname, total, total); }
+            }, ChannelSftp.OVERWRITE);
+
+            emit("sftpUploaded", "sshClient", remotePath);
+            sftpList(sftpCurrentDir);
+
+        } catch (Exception e) {
+            emit("error", "sshClient", "SFTP upload failed: " + e.getMessage());
+        } finally {
+            if (sftpChannel != null && sftpChannel.isConnected()) {
+                sftpChannel.disconnect();
+            }
+        }
+    }
+
+    /**
+     * Upload via HTTP stream with progress (called from /upload/ endpoint).
+     */
+    public void sftpUploadStream(InputStream in, String fileName, long totalSize) {
+        if (!connected.get() || session == null || !session.isConnected()) {
+            emit("error", "sshClient", "Not connected");
+            return;
+        }
+        ChannelSftp sftpChannel = null;
+        try {
+            sftpChannel = (ChannelSftp) session.openChannel("sftp");
+            sftpChannel.connect(5000);
+
+            String remotePath = sftpCurrentDir.equals("/") ? "/" + fileName : sftpCurrentDir + "/" + fileName;
+            final String fname = fileName;
+            sftpChannel.put(in, remotePath, new SftpProgressMonitor() {
+                private long total = totalSize;
+                private long transferred = 0;
+                private int lastPct = -1;
+                @Override public void init(int op, String src, String dest, long max) {
+                    emitProgress(fname, total, 0);
+                }
+                @Override public boolean count(long bytes) {
+                    transferred += bytes;
+                    if (total > 0) {
+                        int pct = (int)(transferred * 100 / total);
+                        if (pct != lastPct) { lastPct = pct; emitProgress(fname, total, transferred); }
+                    }
+                    return true;
+                }
+                @Override public void end() { emitProgress(fname, total, transferred > 0 ? transferred : total); }
+            }, ChannelSftp.OVERWRITE);
+
+            emit("sftpUploaded", "sshClient", remotePath);
+            sftpList(sftpCurrentDir);
+
+        } catch (Exception e) {
+            emit("error", "sshClient", "SFTP upload failed: " + e.getMessage());
+        } finally {
+            if (sftpChannel != null && sftpChannel.isConnected()) {
+                sftpChannel.disconnect();
+            }
+        }
+    }
+
     public String getStatusJson() {
         JsonObject obj = new JsonObject();
         obj.addProperty("connected", connected.get());
@@ -201,7 +402,13 @@ public class SshClientService {
         return gson.toJson(obj);
     }
 
-    // --- Helpers ---
+    public void emitError(String msg) {
+        emit("error", "sshClient", msg);
+    }
+
+    public void emitUploadCancelled() {
+        emit("uploadCancelled", "sshClient", null);
+    }
 
     private void logSystem(String msg, String peer, String i18nKey, String... args) {
         LogEntry entry = new LogEntry(LogEntry.Direction.SYSTEM, msg, peer, i18nKey, args);

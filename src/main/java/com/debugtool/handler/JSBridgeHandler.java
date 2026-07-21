@@ -82,6 +82,10 @@ public class JSBridgeHandler {
                     case "disconnectSsh": disconnectSsh(id, cb); break;
                     case "sshInput": sshInput(id, a.get(1).getAsString(), cb); break;
                     case "resizeSshPty": resizeSshPty(id, a.get(1).getAsInt(), a.get(2).getAsInt(), cb); break;
+                    case "sftpList": sftpList(id, a.size() > 1 ? a.get(1).getAsString() : "/", cb); break;
+                    case "sftpDownload": sftpDownload(id, a.get(1).getAsString(), a.size()>2 ? a.get(2).getAsString() : "", cb); break;
+                    case "sftpUpload": sftpUpload(id, a.get(1).getAsString(), a.get(2).getAsString(), cb); break;
+                    case "pickAndUpload": pickAndUpload(id, cb); break;
                     default: if (cb != null) cb.failure(-2, "Unknown: " + m);
                 }
             } catch (Exception e) {
@@ -208,6 +212,52 @@ public class JSBridgeHandler {
         if (s != null) { s.resizePty(cols, rows); ok(cb, null); } else fail(cb, id);
     }
 
+    private void sftpList(String id, String path, CefQueryCallback cb) {
+        SshClientService s = sshClients.get(id);
+        if (s != null) { s.sftpList(path); ok(cb, null); } else fail(cb, id);
+    }
+
+    private void sftpDownload(String id, String remotePath, String dlDir, CefQueryCallback cb) {
+        SshClientService s = sshClients.get(id);
+        if (s != null) { s.sftpDownload(remotePath, dlDir); ok(cb, null); } else fail(cb, id);
+    }
+
+    private void sftpUpload(String id, String remotePath, String base64Data, CefQueryCallback cb) {
+        SshClientService s = sshClients.get(id);
+        if (s != null) { s.sftpUpload(remotePath, base64Data); ok(cb, null); } else fail(cb, id);
+    }
+
+    private void pickAndUpload(String id, CefQueryCallback cb) {
+        SshClientService s = sshClients.get(id);
+        if (s == null || !s.isConnected()) { fail(cb, id); return; }
+        ok(cb, null);
+        // Open native OS file picker in AWT thread, upload in executor thread
+        java.awt.EventQueue.invokeLater(() -> {
+            java.awt.Frame[] frames = java.awt.Frame.getFrames();
+            java.awt.Frame parent = frames.length > 0 ? frames[0] : null;
+            java.awt.FileDialog fd = new java.awt.FileDialog(parent, "Select File to Upload", java.awt.FileDialog.LOAD);
+            fd.setVisible(true);
+            String selectedFile = fd.getFile();
+            String selectedDir = fd.getDirectory();
+            if (selectedFile != null && selectedDir != null) {
+                java.io.File f = new java.io.File(selectedDir, selectedFile);
+                if (f.isFile()) {
+                    executor.submit(() -> {
+                        try {
+                            byte[] data = java.nio.file.Files.readAllBytes(f.toPath());
+                            String name = f.getName();
+                            s.sftpUploadStream(new java.io.ByteArrayInputStream(data), name, data.length);
+                        } catch (Exception e) {
+                            s.emitError("Upload failed: " + e.getMessage());
+                        }
+                    });
+                }
+            } else {
+                s.emitUploadCancelled();
+            }
+        });
+    }
+
     private void fail(CefQueryCallback cb, String id) { if (cb != null) cb.failure(-3, "Not found: " + id); }
 
     // ==================== Push Events ====================
@@ -242,6 +292,10 @@ public class JSBridgeHandler {
                     + encoded + "').split('').map(function(c){return'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)}).join('')));",
                 browser.getURL(), 0);
         }
+    }
+
+    public SshClientService getSshClient(String id) {
+        return sshClients.get(id);
     }
 
     public void shutdown() {

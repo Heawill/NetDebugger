@@ -15,6 +15,7 @@ import org.cef.handler.*;
 
 import com.debugtool.util.I18n;
 import com.debugtool.service.PersistenceService;
+import com.debugtool.service.SshClientService;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -26,6 +27,7 @@ import java.io.*;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.nio.file.*;
 import java.util.Map;
 
 import com.sun.net.httpserver.HttpServer;
@@ -178,14 +180,16 @@ public class App {
             }
         });
 
+        // Create bridgeHandler before HTTP server (upload endpoint needs it)
+        bridgeHandler = new JSBridgeHandler();
+        bridgeHandler.setPersistence(persistenceService);
+
         String htmlUrl = startHttpServer();
         System.out.println("[NetDebugger] Loading: " + htmlUrl);
 
         cefBrowser = cefClient.createBrowser(htmlUrl, false, false);
 
-        bridgeHandler = new JSBridgeHandler();
         bridgeHandler.setBrowser(cefBrowser);
-        bridgeHandler.setPersistence(persistenceService);
 
         // Direct AWT embedding (no SwingNode, no JavaFX modules)
         Component ui = cefBrowser.getUIComponent();
@@ -210,6 +214,45 @@ public class App {
     private String startHttpServer() {
         try {
             httpServer = HttpServer.create(new InetSocketAddress(0), 0);
+
+            // Upload endpoint for SFTP file uploads
+            httpServer.createContext("/upload/", (HttpExchange exchange) -> {
+                try {
+                    if (!"POST".equals(exchange.getRequestMethod())) {
+                        exchange.sendResponseHeaders(405, 0);
+                        exchange.close();
+                        return;
+                    }
+                    String path = exchange.getRequestURI().getPath();
+                    // /upload/sessionId/fileName
+                    String[] parts = path.substring(9).split("/", 2);
+                    if (parts.length < 2) {
+                        exchange.sendResponseHeaders(400, 0);
+                        exchange.close();
+                        return;
+                    }
+                    String sessionId = parts[0];
+                    String fileName = java.net.URLDecoder.decode(parts[1], "UTF-8");
+                    SshClientService svc = bridgeHandler.getSshClient(sessionId);
+                    if (svc == null || !svc.isConnected()) {
+                        String body = "Session not found or not connected";
+                        exchange.sendResponseHeaders(404, body.length());
+                        try (OutputStream os = exchange.getResponseBody()) { os.write(body.getBytes()); }
+                        return;
+                    }
+                    byte[] data = exchange.getRequestBody().readAllBytes();
+                    svc.sftpUploadStream(new ByteArrayInputStream(data), fileName, data.length);
+                    exchange.sendResponseHeaders(200, 0);
+                    exchange.close();
+                } catch (Exception e) {
+                    try {
+                        String body = "Upload failed: " + e.getMessage();
+                        exchange.sendResponseHeaders(500, body.length());
+                        try (OutputStream os = exchange.getResponseBody()) { os.write(body.getBytes()); }
+                    } catch (Exception ignored) {}
+                }
+            });
+
             httpServer.createContext("/", (HttpExchange exchange) -> {
                 try {
                     String path = exchange.getRequestURI().getPath();

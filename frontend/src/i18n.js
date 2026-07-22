@@ -1,4 +1,6 @@
 // ==================== I18N ====================
+import Vue from 'vue'
+
 var i18nMessages = {
   'zh-CN': {
     language: '语言',
@@ -280,7 +282,7 @@ var i18nMessages = {
   }
 }
 
-export var locale = { value: 'zh-CN' }
+export var locale = Vue.observable({ value: 'zh-CN' })
 window.setLocale = function(tag) {
   if (i18nMessages[tag]) {
     locale.value = tag

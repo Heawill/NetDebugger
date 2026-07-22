@@ -9,7 +9,10 @@
       </div>
     </div>
     <div class="session-main" v-if="activeSession">
-      <div class="sm-left">
+      <div class="panel-toggle" @click="showLeftPanel = !showLeftPanel" :title="showLeftPanel ? $t('hideConfig') : $t('showConfig')">
+        <span class="toggle-arrow" :class="{ collapsed: !showLeftPanel }"></span>
+      </div>
+      <div class="sm-left" v-show="showLeftPanel">
         <div class="card">
           <div class="card-title">{{ $t('sshConfig') }} · {{ activeSession.id }}</div>
           <div class="ssh-config-row">
@@ -157,7 +160,8 @@ export default {
     return {
       sftpContextMenu: { visible: false, x: 0, y: 0, session: null, file: null },
       sshTermContextMenu: { visible: false, x: 0, y: 0, session: null },
-      cmdHistoryDialog: { visible: false, session: null }
+      cmdHistoryDialog: { visible: false, session: null },
+      showLeftPanel: true
     }
   },
   computed: {

@@ -9,7 +9,10 @@
       </div>
     </div>
     <div class="session-main" v-if="activeSession">
-      <div class="sm-left">
+      <div class="panel-toggle" @click="showLeftPanel = !showLeftPanel" :title="showLeftPanel ? $t('hideConfig') : $t('showConfig')">
+        <span class="toggle-arrow" :class="{ collapsed: !showLeftPanel }"></span>
+      </div>
+      <div class="sm-left" v-show="showLeftPanel">
         <div class="card">
           <div class="card-title">{{ $t('serverConfig') }} · {{ activeSession.id }}</div>
           <div style="display:flex;gap:8px;">
@@ -74,6 +77,9 @@ export default {
   props: {
     sessions: { type: Array, required: true },
     activeId: { type: String, default: null }
+  },
+  data() {
+    return { showLeftPanel: true }
   },
   computed: {
     activeSession() { return this.sessions.find(s => s.id === this.activeId) }

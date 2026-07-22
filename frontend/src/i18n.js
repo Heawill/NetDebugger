@@ -138,6 +138,8 @@ var i18nMessages = {
     sessionDelete: '删除会话',
     sessionDeleteConfirm: '确定要删除会话 {0} 吗？',
     sessionRenamePrompt: '为会话 {0} 输入新名称',
+    hideConfig: '隐藏配置栏及下发区',
+    showConfig: '显示配置栏及下发区',
     confirm: '确定',
     cancel: '取消'
   },
@@ -277,6 +279,8 @@ var i18nMessages = {
     sessionDelete: 'Delete Session',
     sessionDeleteConfirm: 'Are you sure you want to delete session {0}?',
     sessionRenamePrompt: 'Enter new name for session {0}',
+    hideConfig: 'Hide config & send panel',
+    showConfig: 'Show config & send panel',
     confirm: 'OK',
     cancel: 'Cancel'
   }

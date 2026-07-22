@@ -9,7 +9,10 @@
       </div>
     </div>
     <div class="session-main" v-if="activeSession">
-      <div class="sm-left">
+      <div class="panel-toggle" @click="showLeftPanel = !showLeftPanel" :title="showLeftPanel ? $t('hideConfig') : $t('showConfig')">
+        <span class="toggle-arrow" :class="{ collapsed: !showLeftPanel }"></span>
+      </div>
+      <div class="sm-left" v-show="showLeftPanel">
         <div class="card">
           <div class="card-title">{{ $t('udpClient') }} · {{ activeSession.id }}</div>
           <div style="margin-bottom:10px;"><label style="font-size:11px;color:var(--text-secondary);">{{ $t('localPort') }}</label><el-input-number v-model="activeSession.port" :min="1" :max="65535" size="small" style="width:100%;margin-top:2px;"></el-input-number></div>
@@ -58,6 +61,9 @@ export default {
   props: {
     sessions: { type: Array, required: true },
     activeId: { type: String, default: null }
+  },
+  data() {
+    return { showLeftPanel: true }
   },
   computed: {
     activeSession() { return this.sessions.find(s => s.id === this.activeId) }

@@ -723,9 +723,44 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
 .session-item .s-del:hover { color: var(--accent-red); }
 
 /* Session Main */
-.session-main { flex: 1; display: flex; gap: 12px; min-width: 0; min-height: 0; overflow: hidden; }
+.session-main { flex: 1; display: flex; gap: 12px; min-width: 0; min-height: 0; overflow: hidden; position: relative; }
 .sm-left { width: 400px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; overflow: hidden; min-height: 0; }
 .sm-right { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+
+/* Panel toggle button */
+.panel-toggle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 16px;
+  z-index: 10;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.15;
+  transition: opacity 0.2s, background 0.2s;
+  border-radius: 0 4px 4px 0;
+}
+.panel-toggle:hover {
+  opacity: 0.6;
+  background: rgba(0,0,0,0.04);
+}
+[data-theme="dark"] .panel-toggle:hover,
+@media (prefers-color-scheme: dark) { [data-theme="auto"] .panel-toggle:hover { background: rgba(255,255,255,0.06); } }
+.toggle-arrow {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-right: 6px solid var(--text-secondary);
+  transition: transform 0.25s ease;
+}
+.toggle-arrow.collapsed {
+  transform: rotate(180deg);
+}
 
 .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow); }
 .card-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }

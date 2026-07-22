@@ -117,6 +117,15 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
 .el-tag--warning { background: rgba(251, 191, 36, 0.12) !important; color: #fbbf24 !important; border-color: rgba(251, 191, 36, 0.25) !important; }
 .el-tag--info { background: var(--dropdown-hover) !important; color: var(--text-secondary) !important; border-color: var(--border-color) !important; }
 
+/* MessageBox / $prompt / $confirm dark-mode support */
+.el-message-box { background: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: var(--radius) !important; box-shadow: 0 8px 32px rgba(0,0,0,0.18) !important; }
+.el-message-box__title { color: var(--text-primary) !important; font-size: 15px !important; font-weight: 600 !important; }
+.el-message-box__message { color: var(--text-secondary) !important; }
+.el-message-box__headerbtn .el-message-box__close { color: var(--text-secondary) !important; }
+.el-message-box__headerbtn:hover .el-message-box__close { color: var(--text-primary) !important; }
+.el-message-box__btns .el-button--default { background: var(--btn-clear-bg) !important; border: 1px solid var(--border-color) !important; color: var(--text-secondary) !important; }
+.el-message-box__btns .el-button--default:hover { background: var(--btn-clear-hover) !important; color: var(--text-primary) !important; }
+
 .btn-start { background: linear-gradient(135deg, #059669, #10b981) !important; border: none !important; color: #fff !important; border-radius: 6px !important; font-weight: 500 !important; }
 .btn-start:hover { box-shadow: 0 4px 12px rgba(16,185,129,0.3) !important; transform: translateY(-1px); }
 .btn-start.is-disabled { background: var(--stat-off) !important; color: var(--text-secondary) !important; }
@@ -201,12 +210,12 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
 .sftp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sftp-size { font-size: 10px; color: var(--text-secondary); flex-shrink: 0; min-width: 50px; text-align: right; }
 .sftp-dl-dir { font-size: 10px; color: var(--text-secondary); cursor: default; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sftp-context-menu { position: fixed; z-index: 9999; background: var(--dropdown-bg, #fff); border: 1px solid var(--border-color); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 4px 0; min-width: 130px; }
-.sftp-context-menu .ctx-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; color: var(--text-primary); transition: background 0.15s; }
-.sftp-context-menu .ctx-item:hover { background: var(--dropdown-hover, #f0f0f0); }
-.sftp-context-menu .ctx-item.ctx-danger { color: var(--accent-red, #e74c3c); }
-.sftp-context-menu .ctx-item .ctx-icon { font-size: 14px; width: 16px; text-align: center; flex-shrink: 0; }
-.sftp-context-menu .ctx-separator { height: 1px; background: var(--border-color); margin: 2px 6px; }
+.sftp-context-menu, .session-context-menu { position: fixed; z-index: 9999; background: var(--dropdown-bg, #fff); border: 1px solid var(--border-color); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 4px 0; min-width: 130px; }
+.sftp-context-menu .ctx-item, .session-context-menu .ctx-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; color: var(--text-primary); transition: background 0.15s; }
+.sftp-context-menu .ctx-item:hover, .session-context-menu .ctx-item:hover { background: var(--dropdown-hover, #f0f0f0); }
+.sftp-context-menu .ctx-item.ctx-danger, .session-context-menu .ctx-item.ctx-danger { color: var(--accent-red, #e74c3c); }
+.sftp-context-menu .ctx-item .ctx-icon, .session-context-menu .ctx-item .ctx-icon { font-size: 14px; width: 16px; text-align: center; flex-shrink: 0; }
+.sftp-context-menu .ctx-separator, .session-context-menu .ctx-separator { height: 1px; background: var(--border-color); margin: 2px 6px; }
 .sftp-item.ctx-active { background: var(--dropdown-hover); }
 .has-downloads { animation: pulse 1.5s infinite; color: var(--accent-cyan) !important; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
@@ -265,7 +274,7 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
         <div class="tool-panel">
           <div class="session-sidebar">
             <el-button class="btn-new" size="small" @click="addSshClient">{{ $t('newSession') }}</el-button>
-            <div v-for="s in sshSessions" :key="s.id" :class="['session-item', {active: sshActiveId===s.id}]" @click="sshActiveId=s.id">
+            <div v-for="s in sshSessions" :key="s.id" :class="['session-item', {active: sshActiveId===s.id}]" @click="sshActiveId=s.id" @contextmenu.prevent="showSessionContextMenu($event, 'sshClient', s)">
               <span class="s-name">{{ s.id }}</span>
               <span :class="['s-status', s.connected?'on':'off']">{{ s.connected ? $t('connected') : $t('disconnected') }}</span>
               <span class="s-del" @click.stop="removeSession('sshClient',s.id)">×</span>
@@ -343,14 +352,14 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
                 <!-- SFTP Context Menu -->
                 <div class="sftp-context-menu" v-show="sftpContextMenu.visible" :style="{ left: sftpContextMenu.x + 'px', top: sftpContextMenu.y + 'px' }" @click.stop>
                   <div v-if="sftpContextMenu.file && !sftpContextMenu.file.isDir" class="ctx-item" @click="downloadFromContextMenu">
-                    <span class="ctx-icon">⬇</span><span>{{ $t('sftpDownload') }}</span>
+                    <span class="ctx-icon">⏬</span><span>{{ $t('sftpDownload') }}</span>
                   </div>
                   <div class="ctx-item" @click="renameFromContextMenu">
                     <span class="ctx-icon">✏️</span><span>{{ $t('sftpRename') }}</span>
                   </div>
                   <div class="ctx-separator"></div>
                   <div class="ctx-item ctx-danger" @click="deleteFromContextMenu">
-                    <span class="ctx-icon">🗑</span><span>{{ $t('sftpDelete') }}</span>
+                    <span class="ctx-icon">❌</span><span>{{ $t('sftpDelete') }}</span>
                   </div>
                 </div>
               </div>
@@ -374,7 +383,7 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
         <div class="tool-panel">
           <div class="session-sidebar">
             <el-button class="btn-new" size="small" @click="addTcpServer">{{ $t('newSession') }}</el-button>
-            <div v-for="s in tcpSessions" :key="s.id" :class="['session-item', {active: tcpActiveId===s.id}]" @click="tcpActiveId=s.id">
+            <div v-for="s in tcpSessions" :key="s.id" :class="['session-item', {active: tcpActiveId===s.id}]" @click="tcpActiveId=s.id" @contextmenu.prevent="showSessionContextMenu($event, 'tcpServer', s)">
               <span class="s-name">{{ s.id }}</span>
               <span :class="['s-status', s.running?'on':'off']">{{ s.running ? $t('running') : $t('stopped') }}</span>
               <span class="s-del" @click.stop="removeSession('tcpServer',s.id)">×</span>
@@ -443,7 +452,7 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
         <div class="tool-panel">
           <div class="session-sidebar">
             <el-button class="btn-new" size="small" @click="addTcpClient">{{ $t('newSession') }}</el-button>
-            <div v-for="s in tcpCliSessions" :key="s.id" :class="['session-item', {active: tcpCliActiveId===s.id}]" @click="tcpCliActiveId=s.id">
+            <div v-for="s in tcpCliSessions" :key="s.id" :class="['session-item', {active: tcpCliActiveId===s.id}]" @click="tcpCliActiveId=s.id" @contextmenu.prevent="showSessionContextMenu($event, 'tcpClient', s)">
               <span class="s-name">{{ s.id }}</span>
               <span :class="['s-status', s.connected?'on':'off']">{{ s.connected ? $t('connected') : $t('disconnected') }}</span>
               <span class="s-del" @click.stop="removeSession('tcpClient',s.id)">×</span>
@@ -500,7 +509,7 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
         <div class="tool-panel">
           <div class="session-sidebar">
             <el-button class="btn-new" size="small" @click="addUdpServer">{{ $t('newSession') }}</el-button>
-            <div v-for="s in udpSessions" :key="s.id" :class="['session-item', {active: udpActiveId===s.id}]" @click="udpActiveId=s.id">
+            <div v-for="s in udpSessions" :key="s.id" :class="['session-item', {active: udpActiveId===s.id}]" @click="udpActiveId=s.id" @contextmenu.prevent="showSessionContextMenu($event, 'udpServer', s)">
               <span class="s-name">{{ s.id }}</span>
               <span :class="['s-status', s.running?'on':'off']">{{ s.running ? $t('running') : $t('stopped') }}</span>
               <span class="s-del" @click.stop="removeSession('udpServer',s.id)">×</span>
@@ -561,7 +570,7 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
         <div class="tool-panel">
           <div class="session-sidebar">
             <el-button class="btn-new" size="small" @click="addUdpClient">{{ $t('newSession') }}</el-button>
-            <div v-for="s in udpCliSessions" :key="s.id" :class="['session-item', {active: udpCliActiveId===s.id}]" @click="udpCliActiveId=s.id">
+            <div v-for="s in udpCliSessions" :key="s.id" :class="['session-item', {active: udpCliActiveId===s.id}]" @click="udpCliActiveId=s.id" @contextmenu.prevent="showSessionContextMenu($event, 'udpClient', s)">
               <span class="s-name">{{ s.id }}</span>
               <span :class="['s-status', s.bound?'on':'off']">{{ s.bound ? $t('bound') : $t('unbound') }}</span>
               <span class="s-del" @click.stop="removeSession('udpClient',s.id)">×</span>
@@ -608,6 +617,19 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
         </div>
       </el-tab-pane>
     </el-tabs>
+  </div>
+  <!-- Session Context Menu -->
+  <div class="session-context-menu" v-show="sessionContextMenu.visible" :style="{ left: sessionContextMenu.x + 'px', top: sessionContextMenu.y + 'px' }" @click.stop>
+    <div class="ctx-item" @click="copySession">
+      <span class="ctx-icon">📋</span><span>{{ $t('sessionCopy') }}</span>
+    </div>
+    <div class="ctx-item" @click="renameSession">
+      <span class="ctx-icon">✏️</span><span>{{ $t('sessionRename') }}</span>
+    </div>
+    <div class="ctx-separator"></div>
+    <div class="ctx-item ctx-danger" @click="deleteSessionFromMenu">
+      <span class="ctx-icon">❌</span><span>{{ $t('sessionDelete') }}</span>
+    </div>
   </div>
 </div>
 
@@ -748,6 +770,12 @@ var i18nMessages = {
     sftpDeleteConfirm: '确定要删除 {0} 吗？此操作不可撤销。',
     sftpRename: '重命名',
     sftpRenamePrompt: '为 {0} 输入新名称',
+    // Session context menu
+    sessionCopy: '复制会话',
+    sessionRename: '重命名会话',
+    sessionDelete: '删除会话',
+    sessionDeleteConfirm: '确定要删除会话 {0} 吗？',
+    sessionRenamePrompt: '为会话 {0} 输入新名称',
     confirm: '确定',
     cancel: '取消'
   },
@@ -880,6 +908,12 @@ var i18nMessages = {
     sftpDeleteConfirm: 'Are you sure you want to delete {0}? This cannot be undone.',
     sftpRename: 'Rename',
     sftpRenamePrompt: 'Enter new name for {0}',
+    // Session context menu
+    sessionCopy: 'Copy Session',
+    sessionRename: 'Rename Session',
+    sessionDelete: 'Delete Session',
+    sessionDeleteConfirm: 'Are you sure you want to delete session {0}?',
+    sessionRenamePrompt: 'Enter new name for session {0}',
     confirm: 'OK',
     cancel: 'Cancel'
   }
@@ -933,6 +967,7 @@ new Vue({
     sshSessions: [], sshActiveId: null,
     downloads: [],
     sftpContextMenu: { visible: false, x: 0, y: 0, session: null, file: null },
+    sessionContextMenu: { visible: false, x: 0, y: 0, type: '', session: null },
     theme: 'auto',
     lang: currentLocale
   },
@@ -1512,6 +1547,121 @@ new Vue({
       }).catch(function() {});
       this.hideSftpContextMenu();
     },
+    // ==================== Session Context Menu ====================
+    showSessionContextMenu(e, type, session) {
+      this.sessionContextMenu.visible = true;
+      this.sessionContextMenu.x = e.clientX;
+      this.sessionContextMenu.y = e.clientY;
+      this.sessionContextMenu.type = type;
+      this.sessionContextMenu.session = session;
+    },
+    hideSessionContextMenu() {
+      this.sessionContextMenu.visible = false;
+    },
+    copySession() {
+      var ctx = this.sessionContextMenu;
+      if (!ctx.session) return;
+      var oldSession = ctx.session;
+      var type = ctx.type;
+      var self = this;
+
+      // Generate new ID with same prefix (makeSession handles counter increment)
+      var prefix = oldSession.id.replace(/\d+$/, '');
+
+      // Determine target array and create method
+      var arr, createMethod;
+      if (type === 'tcpServer') { arr = self.tcpSessions; createMethod = 'createTcpServer'; }
+      else if (type === 'tcpClient') { arr = self.tcpCliSessions; createMethod = 'createTcpClient'; }
+      else if (type === 'udpServer') { arr = self.udpSessions; createMethod = 'createUdpServer'; }
+      else if (type === 'udpClient') { arr = self.udpCliSessions; createMethod = 'createUdpClient'; }
+      else if (type === 'sshClient') { arr = self.sshSessions; createMethod = 'createSshClient'; }
+      else { this.hideSessionContextMenu(); return; }
+
+      // Build new session with copied config (makeSession auto-increments ctr)
+      var newSession = makeSession(prefix, { logs: [] });
+      var newId = newSession.id;
+      if (type === 'tcpServer') {
+        newSession.port = oldSession.port; newSession.maxConn = oldSession.maxConn;
+        newSession.running = false; newSession.clients = []; newSession.targetClient = '';
+      } else if (type === 'tcpClient') {
+        newSession.host = oldSession.host; newSession.port = oldSession.port; newSession.connected = false;
+      } else if (type === 'udpServer') {
+        newSession.port = oldSession.port; newSession.running = false; newSession.clients = []; newSession.targetClient = '';
+        newSession.sendHost = oldSession.sendHost || '127.0.0.1'; newSession.sendPort = oldSession.sendPort || oldSession.port;
+      } else if (type === 'udpClient') {
+        newSession.port = oldSession.port; newSession.bound = false;
+        newSession.sendHost = oldSession.sendHost || '127.0.0.1'; newSession.sendPort = oldSession.sendPort || 9999;
+      } else if (type === 'sshClient') {
+        newSession.host = oldSession.host; newSession.port = oldSession.port;
+        newSession.username = oldSession.username; newSession.password = oldSession.password;
+        newSession.connected = false; newSession.terminal = null; newSession.fitAddon = null;
+        newSession.sftpPath = '/'; newSession.sftpFiles = []; newSession.sftpLoading = false;
+      }
+
+      arr.push(newSession);
+      callJava(createMethod, newId);
+      self.saveAllSessions();
+
+      // Select the new session
+      if (type === 'tcpServer') self.tcpActiveId = newId;
+      else if (type === 'tcpClient') self.tcpCliActiveId = newId;
+      else if (type === 'udpServer') self.udpActiveId = newId;
+      else if (type === 'udpClient') self.udpCliActiveId = newId;
+      else if (type === 'sshClient') self.sshActiveId = newId;
+
+      this.hideSessionContextMenu();
+    },
+    renameSession() {
+      var ctx = this.sessionContextMenu;
+      if (!ctx.session) return;
+      var self = this;
+      var oldId = ctx.session.id;
+      var session = ctx.session;
+      var type = ctx.type;
+
+      this.$prompt(
+        (this.$t('sessionRenamePrompt') || '输入新名称').replace('{0}', oldId),
+        this.$t('sessionRename') || '重命名',
+        { confirmButtonText: this.$t('confirm') || '确定', cancelButtonText: this.$t('cancel') || '取消', inputValue: oldId }
+      ).then(function(result) {
+        var newId = (result && result.value) ? result.value.trim() : '';
+        if (!newId || newId === oldId) return;
+
+        // Update session ID and re-register with Java backend
+        callJava('removeInstance', oldId);
+        session.id = newId;
+        if (type === 'tcpServer') callJava('createTcpServer', newId);
+        else if (type === 'tcpClient') callJava('createTcpClient', newId);
+        else if (type === 'udpServer') callJava('createUdpServer', newId);
+        else if (type === 'udpClient') callJava('createUdpClient', newId);
+        else if (type === 'sshClient') callJava('createSshClient', newId);
+
+        // Update active ID if needed
+        var activeKey = type === 'tcpServer' ? 'tcpActiveId' : type === 'tcpClient' ? 'tcpCliActiveId' : type === 'udpServer' ? 'udpActiveId' : type === 'udpClient' ? 'udpCliActiveId' : 'sshActiveId';
+        if (self[activeKey] === oldId) self[activeKey] = newId;
+
+        self.saveAllSessions();
+      }).catch(function() {});
+
+      this.hideSessionContextMenu();
+    },
+    deleteSessionFromMenu() {
+      var ctx = this.sessionContextMenu;
+      if (!ctx.session) return;
+      var self = this;
+      var sessionId = ctx.session.id;
+      var type = ctx.type;
+
+      this.$confirm(
+        (this.$t('sessionDeleteConfirm') || '确定要删除会话 {0} 吗？').replace('{0}', sessionId),
+        this.$t('sessionDelete') || '删除会话',
+        { confirmButtonText: this.$t('confirm') || '确定', cancelButtonText: this.$t('cancel') || '取消', type: 'warning' }
+      ).then(function() {
+        self.removeSession(type, sessionId);
+      }).catch(function() {});
+
+      this.hideSessionContextMenu();
+    },
     formatSize(bytes) {
       if (!bytes || bytes === 0) return '0 B';
       var units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -1719,8 +1869,8 @@ new Vue({
     };
     document.addEventListener('pointerup', endResize);
 
-    // --- Hide SFTP context menu on global click ---
-    document.addEventListener('click', function() { self.sftpContextMenu.visible = false; });
+    // --- Hide SFTP & session context menu on global click ---
+    document.addEventListener('click', function() { self.sftpContextMenu.visible = false; self.sessionContextMenu.visible = false; });
   },
   updated: function() {
     this.$nextTick(function() { this.resizeTextareas(); });

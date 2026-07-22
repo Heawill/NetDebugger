@@ -204,40 +204,56 @@ See the `handleEvent` method in `App.vue` for the complete event list.
 ## Project Structure
 
 ```
-JavaFxCEF/
+NetDebugger/
+├── frontend/                                   # Vue 2.7 + Element UI frontend source
+│   ├── src/
+│   │   ├── App.vue                             # Root component
+│   │   ├── components/                         # 5 protocol panel components
+│   │   ├── utils.js                            # Utility functions
+│   │   ├── i18n.js                             # i18n message dictionary
+│   │   └── bridge.js                           # JS bridge ready flag
+│   ├── vite.config.js                          # Vite build config
+│   └── package.json                            # Frontend dependencies
 ├── src/
 │   └── main/
 │       ├── java/com/debugtool/
 │       │   ├── App.java                        # Entry point (AWT window + JCEF + HTTP server)
 │       │   ├── handler/
-│       │   │   └── JSBridgeHandler.java        # JS ↔ Java bridge
+│       │   │   ├── JSBridgeHandler.java        # JS ↔ Java generic bridge entry
+│       │   │   ├── BridgeUtils.java            # Bridge helper utilities
+│       │   │   ├── TcpBridgeHandler.java       # TCP-specific bridge handling
+│       │   │   ├── UdpBridgeHandler.java       # UDP-specific bridge handling
+│       │   │   └── SshBridgeHandler.java       # SSH-specific bridge handling
 │       │   ├── model/
 │       │   │   └── LogEntry.java               # Log data model
 │       │   ├── service/
-│       │   │    ├── TcpServerService.java      # TCP server logic
-│       │   │    ├── TcpClientService.java      # TCP client logic
-│       │   │    ├── UdpServerService.java      # UDP server logic
-│       │   │    ├── UdpClientService.java      # UDP client logic
-│       │   │    ├── SshClientService.java      # SSH client logic (terminal + SFTP)
-│       │   │    └── PersistenceService.java    # Session persistence I/O
+│       │   │   ├── TcpServerService.java       # TCP server logic
+│       │   │   ├── TcpClientService.java       # TCP client logic
+│       │   │   ├── UdpServerService.java       # UDP server logic
+│       │   │   ├── UdpClientService.java       # UDP client logic
+│       │   │   ├── SshClientService.java       # SSH client logic (terminal + SFTP)
+│       │   │   └── PersistenceService.java     # Session persistence I/O
 │       │   └── util/
 │       │       ├── HexUtil.java                # HEX encode/decode utility
 │       │       └── I18n.java                   # Internationalization utility
 │       └── resources/
-│           ├── web/                            # Vue + Element UI frontend
-│           │   ├── css/
-│           │   ├── img/
-│           │   ├── js/
-│           │   └── index.html
-│           ├── i18n/                           # Language resource files
+│           ├── web/                            # Frontend build output (generated from frontend/)
+│           ├── i18n/                           # Java-side i18n resource files
 │           │   ├── messages.properties
 │           │   └── messages_zh_CN.properties
 │           └── logo/                           # Logo resources
 │               ├── icon.ico                    # Windows app icon
 │               └── icon.png                    # Window icon
+├── interface/                                  # README screenshots
+├── runtimes/                                   # JCEF runtime binaries
+├── installer-output/                           # jpackage output directory
 ├── pom.xml                                     # Maven build config
 ├── package.sh                                  # jpackage build script
 ├── run.bat                                     # Windows dev-mode launcher
+├── dependency-reduced-pom.xml                  # Maven shade plugin reduced POM
+├── setJava.txt                                 # JDK path config hint
+├── .gitignore
+├── .gitattributes
 ├── LICENSE                                     # MIT License
 └── THIRD-PARTY                                 # Third-party license notices
 ```

@@ -208,40 +208,56 @@ npm run build
 ## 项目结构
 
 ```
-JavaFxCEF/
+NetDebugger/
+├── frontend/                                   # Vue 2.7 + Element UI 前端源码
+│   ├── src/
+│   │   ├── App.vue                             # 根组件
+│   │   ├── components/                         # 五个协议面板组件
+│   │   ├── utils.js                            # 工具函数
+│   │   ├── i18n.js                             # 国际化字典
+│   │   └── bridge.js                           # JS 桥接就绪标志
+│   ├── vite.config.js                          # Vite 构建配置
+│   └── package.json                            # 前端依赖
 ├── src/
 │   └── main/
 │       ├── java/com/debugtool/
 │       │   ├── App.java                        # 主入口（AWT 窗口 + JCEF + HTTP 服务器）
 │       │   ├── handler/
-│       │   │   └── JSBridgeHandler.java        # JS ↔ Java 桥接层
+│       │   │   ├── JSBridgeHandler.java        # JS ↔ Java 通用桥接入口
+│       │   │   ├── BridgeUtils.java            # 桥接工具方法
+│       │   │   ├── TcpBridgeHandler.java       # TCP 相关桥接处理
+│       │   │   ├── UdpBridgeHandler.java       # UDP 相关桥接处理
+│       │   │   └── SshBridgeHandler.java       # SSH 相关桥接处理
 │       │   ├── model/
 │       │   │   └── LogEntry.java               # 日志数据模型
 │       │   ├── service/
-│       │   │    ├── TcpServerService.java      # TCP 服务器逻辑
-│       │   │    ├── TcpClientService.java      # TCP 客户端逻辑
-│       │   │    ├── UdpServerService.java      # UDP 服务器逻辑
-│       │   │    ├── UdpClientService.java      # UDP 客户端逻辑
-│       │   │    ├── SshClientService.java      # SSH 客户端逻辑（终端 + SFTP）
-│       │   │    └── PersistenceService.java    # 会话持久化 I/O
+│       │   │   ├── TcpServerService.java       # TCP 服务器逻辑
+│       │   │   ├── TcpClientService.java       # TCP 客户端逻辑
+│       │   │   ├── UdpServerService.java       # UDP 服务器逻辑
+│       │   │   ├── UdpClientService.java       # UDP 客户端逻辑
+│       │   │   ├── SshClientService.java       # SSH 客户端逻辑（终端 + SFTP）
+│       │   │   └── PersistenceService.java     # 会话持久化 I/O
 │       │   └── util/
 │       │       ├── HexUtil.java                # 十六进制编解码工具
 │       │       └── I18n.java                   # 国际化工具
 │       └── resources/
-│           ├── web/                            # Vue + Element UI 前端
-│           │   ├── css/
-│           │   ├── img/
-│           │   ├── js/
-│           │   └── index.html
-│           ├── i18n/                           # 国际化语言资源文件
+│           ├── web/                            # 前端构建产物（由 frontend/ 构建生成）
+│           ├── i18n/                           # Java 端国际化资源文件
 │           │   ├── messages.properties
 │           │   └── messages_zh_CN.properties
-│           └── logo/                           # logo资源
+│           └── logo/                           # Logo 资源
 │               ├── icon.ico                    # Windows 应用图标
 │               └── icon.png                    # 界面图标资源
+├── interface/                                  # README 截图
+├── runtimes/                                   # JCEF 运行时二进制文件
+├── installer-output/                           # jpackage 打包输出目录
 ├── pom.xml                                     # Maven 构建配置
 ├── package.sh                                  # jpackage 打包脚本
 ├── run.bat                                     # Windows 开发模式启动脚本
+├── dependency-reduced-pom.xml                  # Maven shade 插件生成的精简 POM
+├── setJava.txt                                 # JDK 路径配置提示
+├── .gitignore
+├── .gitattributes
 ├── LICENSE                                     # MIT 许可证
 └── THIRD-PARTY                                 # 第三方依赖许可证
 ```

@@ -1,0 +1,22 @@
+{
+  "name": "netdebugger-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "element-ui": "^2.15.14",
+    "vue": "^2.7.16",
+    "vue-template-compiler": "^2.7.16",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
+  },
+  "devDependencies": {
+    "@vue/compiler-sfc": "^2.7.16",
+    "vite": "^5.4.2",
+    "vite-plugin-vue2": "^2.0.3"
+  }
+}

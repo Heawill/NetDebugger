@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A cross-platform TCP/UDP debugging tool with a modern web-based UI powered by Chromium Embedded Framework.
+A beautifully crafted, cross-platform TCP/UDP/SSH debugging tool with an elegantly designed web-based UI powered by Chromium Embedded Framework.
 
 > [中文文档](./README_zh.md)
 
@@ -21,6 +21,7 @@ A cross-platform TCP/UDP debugging tool with a modern web-based UI powered by Ch
 - **TCP Client** — connect to remote TCP servers, send/receive messages
 - **UDP Server** — bind a local port, receive datagrams, track known clients, send to specific clients or broadcast
 - **UDP Client** — bind local port, send datagrams to target hosts
+- **SSH Client** — connect via SSH with full terminal emulation (xterm-256color), PTY resize, and SFTP file management (browse, upload, download with progress, delete, rename)
 - **Multi-session** — create and manage multiple server/client instances simultaneously
 - **Dark/Light theme** — supports light mode, dark mode, and auto (follow system)
 - **Chinese / English i18n** — full bilingual UI with dynamic language switching
@@ -46,6 +47,8 @@ A cross-platform TCP/UDP debugging tool with a modern web-based UI powered by Ch
 | Build | Maven + maven-shade-plugin (fat jar) |
 | Packaging | jpackage (app-image) |
 | Networking | Java NIO (java.net standard API) |
+| SSH Connectivity | JSch |
+| Terminal Emulation | xterm.js |
 
 ---
 
@@ -125,6 +128,7 @@ JavaFxCEF/
 │       │   │    ├── TcpClientService.java      # TCP client logic
 │       │   │    ├── UdpServerService.java      # UDP server logic
 │       │   │    ├── UdpClientService.java      # UDP client logic
+│       │   │    ├── SshClientService.java      # SSH client logic (terminal + SFTP)
 │       │   │    └── PersistenceService.java    # Session persistence I/O
 │       │   └── util/
 │       │       ├── HexUtil.java                # HEX encode/decode utility
@@ -160,6 +164,8 @@ See [THIRD-PARTY](./THIRD-PARTY) for full license details.
 | Vue.js 2.7 | MIT | Frontend reactive framework |
 | Element UI | MIT | UI component library |
 | Gson 2.10 | Apache 2.0 | JSON serialization |
+| JSch | BSD | SSH connectivity |
+| xterm.js | MIT | Terminal emulation |
 
 ---
 

@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-一款基于 Chromium Embedded Framework 的跨平台 TCP/UDP 网络调试工具，内嵌 Vue 前端，提供原生桌面体验。
+一款基于 Chromium Embedded Framework 的跨平台 TCP/UDP/SSH 网络调试工具，内嵌 Vue 前端，界面精致美观，提供原生桌面体验。
 
 > [English Documentation](./README.md)
 
@@ -21,6 +21,7 @@
 - **TCP 客户端** — 连接远程 TCP 服务器，收发消息
 - **UDP 服务器** — 绑定本地端口，接收数据报，追踪已知客户端，定向或广播发送
 - **UDP 客户端** — 绑定本地端口，向目标主机发送数据报
+- **SSH 客户端** — 通过 SSH 连接远程服务器，支持完整终端模拟（xterm-256color）、PTY 尺寸调整，以及 SFTP 文件管理（浏览、上传、带进度的下载、删除、重命名）
 - **多会话管理** — 同时创建和管理多个服务器/客户端实例
 - **深色/浅色主题** — 支持浅色、深色、跟随系统三种模式
 - **中英文国际化** — 完整双语界面，动态切换
@@ -47,6 +48,8 @@
 | 构建 | Maven + maven-shade-plugin（fat jar） |
 | 打包 | jpackage（app-image） |
 | 网络通信 | Java NIO（java.net 标准 API） |
+| SSH 连接 | JSch |
+| 终端模拟 | xterm.js |
 
 ---
 
@@ -129,6 +132,7 @@ JavaFxCEF/
 │       │   │    ├── TcpClientService.java      # TCP 客户端逻辑
 │       │   │    ├── UdpServerService.java      # UDP 服务器逻辑
 │       │   │    ├── UdpClientService.java      # UDP 客户端逻辑
+│       │   │    ├── SshClientService.java      # SSH 客户端逻辑（终端 + SFTP）
 │       │   │    └── PersistenceService.java    # 会话持久化 I/O
 │       │   └── util/
 │       │       ├── HexUtil.java                # 十六进制编解码工具
@@ -164,6 +168,8 @@ JavaFxCEF/
 | Vue.js 2.7 | MIT | 前端响应式框架 |
 | Element UI | MIT | UI 组件库 |
 | Gson 2.10 | Apache 2.0 | JSON 序列化 |
+| JSch | BSD | SSH 连接 |
+| xterm.js | MIT | 终端模拟 |
 
 ---
 

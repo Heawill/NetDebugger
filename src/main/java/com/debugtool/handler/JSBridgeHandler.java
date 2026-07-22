@@ -20,15 +20,19 @@ public class JSBridgeHandler {
     private CefBrowser browser;
     private final AtomicInteger idCounter = new AtomicInteger(1);
 
-    private final ConcurrentHashMap<String, TcpServerService> tcpServers = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, TcpClientService> tcpClients = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, UdpServerService> udpServers = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, UdpClientService> udpClients = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, SshClientService> sshClients = new ConcurrentHashMap<>();
+    private final TcpBridgeHandler tcpHandler;
+    private final UdpBridgeHandler udpHandler;
+    private final SshBridgeHandler sshHandler;
 
     private PersistenceService persistence;
     private volatile boolean restored = false;
     private java.util.function.Consumer<String> themeCallback;
+
+    public JSBridgeHandler() {
+        this.tcpHandler = new TcpBridgeHandler(executor, this::pushEvent);
+        this.udpHandler = new UdpBridgeHandler(executor, this::pushEvent);
+        this.sshHandler = new SshBridgeHandler(executor, this::pushEvent);
+    }
 
     public void setBrowser(CefBrowser b) { this.browser = b; }
     public void setPersistence(PersistenceService p) { this.persistence = p; }
@@ -50,45 +54,50 @@ public class JSBridgeHandler {
         executor.submit(() -> {
             try {
                 switch (m) {
-                    case "createTcpServer": createTcpServer(id, cb); break;
-                    case "createTcpClient": createTcpClient(id, cb); break;
-                    case "createUdpServer": createUdpServer(id, cb); break;
-                    case "createUdpClient": createUdpClient(id, cb); break;
-                    case "removeInstance": removeInstance(id, cb); break;
-                    case "startTcpServer": startTcpServer(id, a.get(1).getAsInt(), a.get(2).getAsInt(), cb); break;
-                    case "stopTcpServer": stopTcpServer(id, cb); break;
-                    case "startTcpClient": startTcpClient(id, a.get(1).getAsString(), a.get(2).getAsInt(), cb); break;
-                    case "stopTcpClient": stopTcpClient(id, cb); break;
-                    case "startUdpServer": startUdpServer(id, a.get(1).getAsInt(), cb); break;
-                    case "stopUdpServer": stopUdpServer(id, cb); break;
-                    case "startUdpClient": startUdpClient(id, a.get(1).getAsInt(), cb); break;
-                    case "stopUdpClient": stopUdpClient(id, cb); break;
-                    case "tcpServerSend": tcpServerSend(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), a.get(4).getAsString(), cb); break;
-                    case "tcpServerSendAll": tcpServerSendAll(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), cb); break;
-                    case "tcpServerDisconnectClient": tcpServerDisconnectClient(id, a.get(1).getAsString(), cb); break;
-                    case "tcpClientSend": tcpClientSend(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), cb); break;
-                    case "udpServerSend": udpServerSend(id, a.get(1).getAsString(), a.get(2).getAsInt(), a.get(3).getAsString(), a.get(4).getAsString(), a.get(5).getAsString(), cb); break;
-                    case "udpServerSendToClient": udpServerSendToClient(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), a.get(4).getAsString(), cb); break;
-                    case "udpServerSendAll": udpServerSendAll(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), cb); break;
-                    case "udpServerForgetClient": udpServerForgetClient(id, a.get(1).getAsString(), cb); break;
-                    case "udpClientSend": udpClientSend(id, a.get(1).getAsString(), a.get(2).getAsInt(), a.get(3).getAsString(), a.get(4).getAsString(), a.get(5).getAsString(), cb); break;
-                    case "restoreState": restoreState(cb); break;
-                    case "persistSessions": persistSessions(a.get(0).getAsString(), cb); break;
-                    case "persistConfig": persistConfig(a.get(0).getAsString(), a.get(1).getAsString(), cb); break;
-                    case "clearLogs": clearLogs(id, cb); break;
-                    case "setLanguage": setLanguage(a.get(0).getAsString(), cb); break;
-                    case "createSshClient": createSshClient(id, cb); break;
-                    case "connectSsh": connectSsh(id, a.get(1).getAsString(), a.get(2).getAsInt(), a.get(3).getAsString(), a.get(4).getAsString(), a.get(5).getAsInt(), a.get(6).getAsInt(), cb); break;
-                    case "disconnectSsh": disconnectSsh(id, cb); break;
-                    case "sshInput": sshInput(id, a.get(1).getAsString(), cb); break;
-                    case "resizeSshPty": resizeSshPty(id, a.get(1).getAsInt(), a.get(2).getAsInt(), cb); break;
-                    case "sftpList": sftpList(id, a.size() > 1 ? a.get(1).getAsString() : "/", cb); break;
-                    case "sftpDownload": sftpDownload(id, a.get(1).getAsString(), a.size()>2 ? a.get(2).getAsString() : "", cb); break;
-                    case "sftpUpload": sftpUpload(id, a.get(1).getAsString(), a.get(2).getAsString(), cb); break;
-                    case "sftpDelete": sftpDelete(id, a.get(1).getAsString(), cb); break;
-                    case "sftpRename": sftpRename(id, a.get(1).getAsString(), a.get(2).getAsString(), cb); break;
-                    case "pickAndUpload": pickAndUpload(id, cb); break;
-                    default: if (cb != null) cb.failure(-2, "Unknown: " + m);
+                    // === TCP ===
+                    case "createTcpServer":         tcpHandler.createTcpServer(id, cb); break;
+                    case "createTcpClient":         tcpHandler.createTcpClient(id, cb); break;
+                    case "startTcpServer":          tcpHandler.startTcpServer(id, a.get(1).getAsInt(), a.get(2).getAsInt(), cb); break;
+                    case "stopTcpServer":           tcpHandler.stopTcpServer(id, cb); break;
+                    case "startTcpClient":          tcpHandler.startTcpClient(id, a.get(1).getAsString(), a.get(2).getAsInt(), cb); break;
+                    case "stopTcpClient":           tcpHandler.stopTcpClient(id, cb); break;
+                    case "tcpServerSend":           tcpHandler.tcpServerSend(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), a.get(4).getAsString(), cb); break;
+                    case "tcpServerSendAll":        tcpHandler.tcpServerSendAll(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), cb); break;
+                    case "tcpServerDisconnectClient": tcpHandler.tcpServerDisconnectClient(id, a.get(1).getAsString(), cb); break;
+                    case "tcpClientSend":           tcpHandler.tcpClientSend(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), cb); break;
+                    // === UDP ===
+                    case "createUdpServer":         udpHandler.createUdpServer(id, cb); break;
+                    case "createUdpClient":         udpHandler.createUdpClient(id, cb); break;
+                    case "startUdpServer":          udpHandler.startUdpServer(id, a.get(1).getAsInt(), cb); break;
+                    case "stopUdpServer":           udpHandler.stopUdpServer(id, cb); break;
+                    case "startUdpClient":          udpHandler.startUdpClient(id, a.get(1).getAsInt(), cb); break;
+                    case "stopUdpClient":           udpHandler.stopUdpClient(id, cb); break;
+                    case "udpServerSend":           udpHandler.udpServerSend(id, a.get(1).getAsString(), a.get(2).getAsInt(), a.get(3).getAsString(), a.get(4).getAsString(), a.get(5).getAsString(), cb); break;
+                    case "udpServerSendToClient":   udpHandler.udpServerSendToClient(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), a.get(4).getAsString(), cb); break;
+                    case "udpServerSendAll":        udpHandler.udpServerSendAll(id, a.get(1).getAsString(), a.get(2).getAsString(), a.get(3).getAsString(), cb); break;
+                    case "udpServerForgetClient":   udpHandler.udpServerForgetClient(id, a.get(1).getAsString(), cb); break;
+                    case "udpClientSend":           udpHandler.udpClientSend(id, a.get(1).getAsString(), a.get(2).getAsInt(), a.get(3).getAsString(), a.get(4).getAsString(), a.get(5).getAsString(), cb); break;
+                    // === SSH ===
+                    case "createSshClient":         sshHandler.createSshClient(id, cb); break;
+                    case "connectSsh":              sshHandler.connectSsh(id, a.get(1).getAsString(), a.get(2).getAsInt(), a.get(3).getAsString(), a.get(4).getAsString(), a.get(5).getAsInt(), a.get(6).getAsInt(), cb); break;
+                    case "disconnectSsh":           sshHandler.disconnectSsh(id, cb); break;
+                    case "sshInput":                sshHandler.sshInput(id, a.get(1).getAsString(), cb); break;
+                    case "resizeSshPty":            sshHandler.resizeSshPty(id, a.get(1).getAsInt(), a.get(2).getAsInt(), cb); break;
+                    case "sshPaste":                sshHandler.sshPaste(id, cb); break;
+                    case "sftpList":                sshHandler.sftpList(id, a.size() > 1 ? a.get(1).getAsString() : "/", cb); break;
+                    case "sftpDownload":            sshHandler.sftpDownload(id, a.get(1).getAsString(), a.size()>2 ? a.get(2).getAsString() : "", cb); break;
+                    case "sftpUpload":              sshHandler.sftpUpload(id, a.get(1).getAsString(), a.get(2).getAsString(), cb); break;
+                    case "sftpDelete":              sshHandler.sftpDelete(id, a.get(1).getAsString(), cb); break;
+                    case "sftpRename":              sshHandler.sftpRename(id, a.get(1).getAsString(), a.get(2).getAsString(), cb); break;
+                    case "pickAndUpload":           sshHandler.pickAndUpload(id, cb); break;
+                    // === Shared ===
+                    case "removeInstance":          removeInstance(id, cb); break;
+                    case "restoreState":            restoreState(cb); break;
+                    case "persistSessions":         persistSessions(a.get(0).getAsString(), cb); break;
+                    case "persistConfig":           persistConfig(a.get(0).getAsString(), a.get(1).getAsString(), cb); break;
+                    case "clearLogs":               clearLogs(id, cb); break;
+                    case "setLanguage":             setLanguage(a.get(0).getAsString(), cb); break;
+                    default:                        if (cb != null) cb.failure(-2, "Unknown: " + m);
                 }
             } catch (Exception e) {
                 if (cb != null) cb.failure(-5, e.getMessage());
@@ -96,190 +105,18 @@ public class JSBridgeHandler {
         });
     }
 
-    private void ok(CefQueryCallback c, String r) { if (c != null) c.success(r != null ? r : "ok"); }
-
-    private void createTcpServer(String id, CefQueryCallback cb) {
-        TcpServerService s = new TcpServerService(json -> pushEvent(id, "tcpServer", json));
-        tcpServers.put(id, s);
-        ok(cb, id);
-    }
-    private void createTcpClient(String id, CefQueryCallback cb) {
-        TcpClientService c = new TcpClientService(json -> pushEvent(id, "tcpClient", json));
-        tcpClients.put(id, c);
-        ok(cb, id);
-    }
-    private void createUdpServer(String id, CefQueryCallback cb) {
-        UdpServerService s = new UdpServerService(json -> pushEvent(id, "udpServer", json));
-        udpServers.put(id, s);
-        ok(cb, id);
-    }
-    private void createUdpClient(String id, CefQueryCallback cb) {
-        UdpClientService c = new UdpClientService(json -> pushEvent(id, "udpClient", json));
-        udpClients.put(id, c);
-        ok(cb, id);
-    }
+    // ==================== Shared Operations ====================
 
     private void removeInstance(String id, CefQueryCallback cb) {
-        TcpServerService ts = tcpServers.remove(id); if (ts != null) { ts.stop(); ok(cb, "removed"); return; }
-        TcpClientService tc = tcpClients.remove(id); if (tc != null) { tc.disconnect(); ok(cb, "removed"); return; }
-        UdpServerService us = udpServers.remove(id); if (us != null) { us.stop(); ok(cb, "removed"); return; }
-        UdpClientService uc = udpClients.remove(id); if (uc != null) { uc.unbind(); ok(cb, "removed"); return; }
-        SshClientService ss = sshClients.remove(id); if (ss != null) { ss.disconnect(); ok(cb, "removed"); return; }
-        if (cb != null) cb.failure(-3, "Not found: " + id);
+        if (tcpHandler.removeInstance(id)) { BridgeUtils.ok(cb, "removed"); return; }
+        if (udpHandler.removeInstance(id)) { BridgeUtils.ok(cb, "removed"); return; }
+        if (sshHandler.removeInstance(id)) { BridgeUtils.ok(cb, "removed"); return; }
+        BridgeUtils.fail(cb, id);
     }
-
-    private void startTcpServer(String id, int port, int maxConn, CefQueryCallback cb) {
-        TcpServerService s = tcpServers.get(id); if (s != null) { s.start(port, maxConn); ok(cb, null); } else fail(cb, id);
-    }
-    private void stopTcpServer(String id, CefQueryCallback cb) {
-        TcpServerService s = tcpServers.get(id); if (s != null) { s.stop(); ok(cb, null); } else fail(cb, id);
-    }
-    private void startTcpClient(String id, String host, int port, CefQueryCallback cb) {
-        TcpClientService c = tcpClients.get(id); if (c != null) { c.connect(host, port); ok(cb, null); } else fail(cb, id);
-    }
-    private void stopTcpClient(String id, CefQueryCallback cb) {
-        TcpClientService c = tcpClients.get(id); if (c != null) { c.disconnect(); ok(cb, null); } else fail(cb, id);
-    }
-    private void startUdpServer(String id, int port, CefQueryCallback cb) {
-        UdpServerService s = udpServers.get(id); if (s != null) { s.start(port); ok(cb, null); } else fail(cb, id);
-    }
-    private void stopUdpServer(String id, CefQueryCallback cb) {
-        UdpServerService s = udpServers.get(id); if (s != null) { s.stop(); ok(cb, null); } else fail(cb, id);
-    }
-    private void startUdpClient(String id, int port, CefQueryCallback cb) {
-        UdpClientService c = udpClients.get(id); if (c != null) { c.bind(port); ok(cb, null); } else fail(cb, id);
-    }
-    private void stopUdpClient(String id, CefQueryCallback cb) {
-        UdpClientService c = udpClients.get(id); if (c != null) { c.unbind(); ok(cb, null); } else fail(cb, id);
-    }
-
-    private void tcpServerSend(String id, String clientId, String msg, String encoding, String format, CefQueryCallback cb) {
-        TcpServerService s = tcpServers.get(id); if (s != null) { s.send(clientId, msg, encoding, format); ok(cb, null); } else fail(cb, id);
-    }
-    private void tcpServerSendAll(String id, String msg, String encoding, String format, CefQueryCallback cb) {
-        TcpServerService s = tcpServers.get(id); if (s != null) { s.sendAll(msg, encoding, format); ok(cb, null); } else fail(cb, id);
-    }
-    private void tcpServerDisconnectClient(String id, String clientId, CefQueryCallback cb) {
-        TcpServerService s = tcpServers.get(id); if (s != null) { s.disconnectClient(clientId); ok(cb, null); } else fail(cb, id);
-    }
-    private void tcpClientSend(String id, String msg, String encoding, String format, CefQueryCallback cb) {
-        TcpClientService c = tcpClients.get(id); if (c != null) { c.send(msg, encoding, format); ok(cb, null); } else fail(cb, id);
-    }
-    private void udpServerSend(String id, String host, int port, String msg, String encoding, String format, CefQueryCallback cb) {
-        UdpServerService s = udpServers.get(id); if (s != null) { s.send(host, port, msg, encoding, format); ok(cb, null); } else fail(cb, id);
-    }
-    private void udpServerSendToClient(String id, String clientId, String msg, String encoding, String format, CefQueryCallback cb) {
-        UdpServerService s = udpServers.get(id); if (s != null) { s.sendToClient(clientId, msg, encoding, format); ok(cb, null); } else fail(cb, id);
-    }
-    private void udpServerSendAll(String id, String msg, String encoding, String format, CefQueryCallback cb) {
-        UdpServerService s = udpServers.get(id); if (s != null) { s.sendAll(msg, encoding, format); ok(cb, null); } else fail(cb, id);
-    }
-    private void udpServerForgetClient(String id, String clientId, CefQueryCallback cb) {
-        UdpServerService s = udpServers.get(id); if (s != null) { s.forgetClient(clientId); ok(cb, null); } else fail(cb, id);
-    }
-    private void udpClientSend(String id, String host, int port, String msg, String encoding, String format, CefQueryCallback cb) {
-        UdpClientService c = udpClients.get(id); if (c != null) { c.send(host, port, msg, encoding, format); ok(cb, null); } else fail(cb, id);
-    }
-
-    private void createSshClient(String id, CefQueryCallback cb) {
-        SshClientService s = new SshClientService(json -> pushEvent(id, "sshClient", json));
-        sshClients.put(id, s);
-        ok(cb, id);
-    }
-
-    private void connectSsh(String id, String host, int port, String username, String password, int cols, int rows, CefQueryCallback cb) {
-        SshClientService s = sshClients.get(id);
-        if (s != null) {
-            s.connect(host, port, username, password, cols, rows, errorMsg -> {
-                if (cb != null) cb.failure(-1, errorMsg);
-            });
-            if (cb != null) cb.success("ok");
-        } else {
-            fail(cb, id);
-        }
-    }
-
-    private void disconnectSsh(String id, CefQueryCallback cb) {
-        SshClientService s = sshClients.get(id);
-        if (s != null) { s.disconnect(); ok(cb, null); } else fail(cb, id);
-    }
-
-    private void sshInput(String id, String base64Data, CefQueryCallback cb) {
-        SshClientService s = sshClients.get(id);
-        if (s != null) { s.sendTerminalData(base64Data); ok(cb, null); } else fail(cb, id);
-    }
-
-    private void resizeSshPty(String id, int cols, int rows, CefQueryCallback cb) {
-        SshClientService s = sshClients.get(id);
-        if (s != null) { s.resizePty(cols, rows); ok(cb, null); } else fail(cb, id);
-    }
-
-    private void sftpList(String id, String path, CefQueryCallback cb) {
-        SshClientService s = sshClients.get(id);
-        if (s != null) { s.sftpList(path); ok(cb, null); } else fail(cb, id);
-    }
-
-    private void sftpDownload(String id, String remotePath, String dlDir, CefQueryCallback cb) {
-        SshClientService s = sshClients.get(id);
-        if (s != null) { s.sftpDownload(remotePath, dlDir); ok(cb, null); } else fail(cb, id);
-    }
-
-    private void sftpUpload(String id, String remotePath, String base64Data, CefQueryCallback cb) {
-        SshClientService s = sshClients.get(id);
-        if (s != null) { s.sftpUpload(remotePath, base64Data); ok(cb, null); } else fail(cb, id);
-    }
-
-    private void sftpDelete(String id, String remotePath, CefQueryCallback cb) {
-        SshClientService s = sshClients.get(id);
-        if (s != null) { s.sftpDelete(remotePath); ok(cb, null); } else fail(cb, id);
-    }
-
-    private void sftpRename(String id, String oldPath, String newName, CefQueryCallback cb) {
-        SshClientService s = sshClients.get(id);
-        if (s == null || !s.isConnected()) { fail(cb, id); return; }
-        SshClientService svc = s;
-        String dir = oldPath.contains("/") ? oldPath.substring(0, oldPath.lastIndexOf('/')) : "/";
-        String newPath = (dir.equals("/") ? "/" : dir + "/") + newName;
-        svc.sftpRename(oldPath, newPath);
-        ok(cb, null);
-    }
-
-    private void pickAndUpload(String id, CefQueryCallback cb) {
-        SshClientService s = sshClients.get(id);
-        if (s == null || !s.isConnected()) { fail(cb, id); return; }
-        ok(cb, null);
-        // Open native OS file picker in AWT thread, upload in executor thread
-        java.awt.EventQueue.invokeLater(() -> {
-            java.awt.Frame[] frames = java.awt.Frame.getFrames();
-            java.awt.Frame parent = frames.length > 0 ? frames[0] : null;
-            java.awt.FileDialog fd = new java.awt.FileDialog(parent, "Select File to Upload", java.awt.FileDialog.LOAD);
-            fd.setVisible(true);
-            String selectedFile = fd.getFile();
-            String selectedDir = fd.getDirectory();
-            if (selectedFile != null && selectedDir != null) {
-                java.io.File f = new java.io.File(selectedDir, selectedFile);
-                if (f.isFile()) {
-                    executor.submit(() -> {
-                        try {
-                            byte[] data = java.nio.file.Files.readAllBytes(f.toPath());
-                            String name = f.getName();
-                            s.sftpUploadStream(new java.io.ByteArrayInputStream(data), name, data.length);
-                        } catch (Exception e) {
-                            s.emitError("Upload failed: " + e.getMessage());
-                        }
-                    });
-                }
-            } else {
-                s.emitUploadCancelled();
-            }
-        });
-    }
-
-    private void fail(CefQueryCallback cb, String id) { if (cb != null) cb.failure(-3, "Not found: " + id); }
 
     // ==================== Push Events ====================
 
-    private void pushEvent(String id, String target, String json) {
+    private void pushEvent(String id, String json) {
         JsonObject evt = JsonParser.parseString(json).getAsJsonObject();
         evt.addProperty("id", id);
 
@@ -312,15 +149,13 @@ public class JSBridgeHandler {
     }
 
     public SshClientService getSshClient(String id) {
-        return sshClients.get(id);
+        return sshHandler.getSshClient(id);
     }
 
     public void shutdown() {
-        for (TcpServerService s : tcpServers.values()) s.stop();
-        for (TcpClientService c : tcpClients.values()) c.disconnect();
-        for (UdpServerService s : udpServers.values()) s.stop();
-        for (UdpClientService c : udpClients.values()) c.unbind();
-        for (SshClientService s : sshClients.values()) s.disconnect();
+        tcpHandler.shutdown();
+        udpHandler.shutdown();
+        sshHandler.shutdown();
         executor.shutdownNow();
         if (persistence != null) persistence.shutdown();
     }
@@ -366,22 +201,22 @@ public class JSBridgeHandler {
     private void restoreState(CefQueryCallback cb) {
         restored = false;
         pushRestoreState();
-        ok(cb, "ok");
+        BridgeUtils.ok(cb, "ok");
     }
 
     private void persistSessions(String sessionsJson, CefQueryCallback cb) {
-        if (persistence == null) { ok(cb, "ok"); return; }
+        if (persistence == null) { BridgeUtils.ok(cb, "ok"); return; }
         try {
             JsonArray arr = JsonParser.parseString(sessionsJson).getAsJsonArray();
             persistence.saveSessions(arr);
-            ok(cb, "ok");
+            BridgeUtils.ok(cb, "ok");
         } catch (Exception e) {
             if (cb != null) cb.failure(-1, "persistSessions: " + e.getMessage());
         }
     }
 
     private void persistConfig(String key, String value, CefQueryCallback cb) {
-        if (persistence == null) { ok(cb, "ok"); return; }
+        if (persistence == null) { BridgeUtils.ok(cb, "ok"); return; }
         try {
             Map<String, String> config = persistence.loadConfig();
             config.put(key, value);
@@ -389,7 +224,7 @@ public class JSBridgeHandler {
             if ("theme".equals(key) && themeCallback != null) {
                 themeCallback.accept(value);
             }
-            ok(cb, "ok");
+            BridgeUtils.ok(cb, "ok");
         } catch (Exception e) {
             if (cb != null) cb.failure(-1, "persistConfig: " + e.getMessage());
         }
@@ -399,7 +234,7 @@ public class JSBridgeHandler {
         if (persistence != null) {
             persistence.clearLogs(sessionId);
         }
-        ok(cb, "ok");
+        BridgeUtils.ok(cb, "ok");
     }
 
     private void setLanguage(String langTag, CefQueryCallback cb) {
@@ -409,7 +244,7 @@ public class JSBridgeHandler {
             config.put("language", langTag);
             persistence.saveConfig(config);
         }
-        ok(cb, "ok");
+        BridgeUtils.ok(cb, "ok");
     }
 
     private void pushStateEvent(String type, String json) {

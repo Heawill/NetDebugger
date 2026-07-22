@@ -111,6 +111,96 @@ To create an installer (`.msi`/`.exe` on Windows, `.dmg` on macOS, `.deb`/`.rpm`
 
 ---
 
+## Frontend Development
+
+The frontend resides in the [`frontend/`](./frontend) directory — a standalone Vue 2.7 + Element UI project built with Vite.
+
+### Tech Stack
+
+| Technology | Version | Purpose |
+|---|---|---|
+| Vue | 2.7.16 | Reactive UI framework (Options API) |
+| Element UI | 2.15.14 | Desktop UI component library |
+| Vite | 5.x | Dev server & build tool |
+| vite-plugin-vue2 | 2.0.3 | Vue 2 SFC compilation plugin |
+| xterm.js | 5.3.0 | SSH terminal emulation |
+| xterm-addon-fit | 0.8.0 | Auto-fit terminal to container |
+
+### Directory Structure
+
+```
+frontend/
+├── index.html                 # HTML entry point
+├── package.json               # Dependencies & scripts
+├── vite.config.js             # Vite build config
+├── public/                    # Static assets (copied as-is on build)
+│   └── img/                   # Icons, logos, etc.
+└── src/
+    ├── main.js                # Vue app entry, imports Element UI & xterm.css
+    ├── App.vue                # Root component: layout, session mgmt, event dispatch, theme/i18n
+    ├── bridge.js              # JS ↔ Java bridge ready flag
+    ├── i18n.js                # i18n message dictionary (Chinese & English)
+    ├── utils.js               # Utilities (callJava, makeSession, hexDecode, etc.)
+    └── components/
+        ├── TcpServerPanel.vue # TCP Server panel component
+        ├── TcpClientPanel.vue # TCP Client panel component
+        ├── UdpServerPanel.vue # UDP Server panel component
+        ├── UdpClientPanel.vue # UDP Client panel component
+        └── SshClientPanel.vue # SSH Client panel component (terminal + SFTP)
+```
+
+### Build Output
+
+Build artifacts are emitted to `src/main/resources/web/`, which is served directly by the embedded HTTP server in `App.java`.
+
+```bash
+# Enter the frontend directory
+cd frontend
+
+# Install dependencies (first time only)
+npm install
+
+# Start dev server with hot reload
+npm run dev
+
+# Production build
+npm run build
+```
+
+> Note: `mvn package` does **not** automatically trigger a frontend build. You should run `npm run build` manually inside `frontend/`. If desired, integrate `frontend-maven-plugin` into `pom.xml` for automated builds.
+
+### Architecture
+
+#### Java ↔ JavaScript Bridge
+
+The frontend communicates with the Java backend via `window.cefQuery` (JCEF's JavaScript binding):
+
+- **Frontend → Java**: `callJava(method, ...args)` → serialized to JSON → sent via `cefQuery` → received by `JSBridgeHandler.java` → routed to the appropriate Service
+- **Java → Frontend**: Java calls `CefBrowser.executeJavaScript` to invoke `window.handleBridgeEvent(json)` → handled by `App.vue`'s `handleEvent` method
+
+See the `handleEvent` method in `App.vue` for the complete event list.
+
+#### Session Management
+
+- Each session type (TCP Server, TCP Client, UDP Server, UDP Client, SSH Client) maintains its own session array (e.g., `tcpSessions`, `sshSessions`) and active ID (e.g., `tcpActiveId`, `sshActiveId`)
+- `makeSession(prefix, extras)` creates session objects uniformly with auto-incrementing IDs
+- Session config is persisted via `callJava('persistSessions', JSON.stringify(all))` to the Java backend
+
+#### Theme System
+
+- Supports three modes: `light`, `dark`, `auto` (follows system preference)
+- Theme switching via CSS custom properties (`--bg-primary`, `--text-primary`, etc.)
+- `auto` mode uses `@media (prefers-color-scheme: dark)` media query
+- Theme choice is stored in `localStorage` and synced to the Java backend
+
+#### Internationalization
+
+- Bilingual support (Chinese & English) via the `i18nMessages` dictionary in `i18n.js`
+- `$t(key)` method for in-template translations; `setLang(cmd)` switches language
+- Language preference is persisted to `localStorage` and synced to the Java backend
+
+---
+
 ## Project Structure
 
 ```

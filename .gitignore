@@ -3,3 +3,6 @@ installer-output/
 package-input/
 target/
 setJava.txt
+frontend/node_modules/
+frontend/dist/
+frontend/public/img/

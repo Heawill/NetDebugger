@@ -115,6 +115,96 @@ bash package.sh
 
 ---
 
+## 前端开发
+
+前端位于 [`frontend/`](./frontend) 目录，是一个独立的 Vue 2.7 + Element UI 项目，使用 Vite 构建。
+
+### 技术选型
+
+| 技术 | 版本 | 用途 |
+|---|---|---|
+| Vue | 2.7.16 | 响应式 UI 框架（Options API） |
+| Element UI | 2.15.14 | 桌面端 UI 组件库 |
+| Vite | 5.x | 开发服务器与构建工具 |
+| vite-plugin-vue2 | 2.0.3 | Vue 2 SFC 编译支持 |
+| xterm.js | 5.3.0 | SSH 终端模拟 |
+| xterm-addon-fit | 0.8.0 | 终端自动适配容器尺寸 |
+
+### 目录结构
+
+```
+frontend/
+├── index.html                 # HTML 入口
+├── package.json               # 依赖与脚本
+├── vite.config.js             # Vite 构建配置
+├── public/                    # 静态资源（编译时原样复制）
+│   └── img/                   # 图标、logo 等图片资源
+└── src/
+    ├── main.js                # Vue 应用入口，挂载 Element UI 和 xterm.css
+    ├── App.vue                # 根组件：布局、会话管理、事件分发、主题/语言切换
+    ├── bridge.js              # JS ↔ Java 桥接就绪标志
+    ├── i18n.js                # 中英文国际化消息字典
+    ├── utils.js               # 工具函数（callJava、makeSession、hexDecode 等）
+    └── components/
+        ├── TcpServerPanel.vue # TCP 服务器面板组件
+        ├── TcpClientPanel.vue # TCP 客户端面板组件
+        ├── UdpServerPanel.vue # UDP 服务器面板组件
+        ├── UdpClientPanel.vue # UDP 客户端面板组件
+        └── SshClientPanel.vue # SSH 客户端面板组件（终端 + SFTP）
+```
+
+### 构建输出
+
+构建产物输出到 `src/main/resources/web/`，由 Java 内嵌 HTTP 服务器（`App.java`）直接托管。
+
+```bash
+# 进入前端目录
+cd frontend
+
+# 安装依赖（首次）
+npm install
+
+# 启动开发服务器（热更新）
+npm run dev
+
+# 生产构建
+npm run build
+```
+
+> 一般情况下，执行 `mvn package` 时 Maven 不会自动触发前端构建。前端构建需在 `frontend/` 目录下手动执行 `npm run build`。也可以自行在 `pom.xml` 中集成 `frontend-maven-plugin` 实现自动化构建。
+
+### 架构说明
+
+#### Java ↔ JavaScript 桥接
+
+前端通过 `window.cefQuery`（JCEF 提供的 JavaScript 绑定）与 Java 后端通信：
+
+- **前端调用 Java**：`callJava(method, ...args)` → 序列化为 JSON → `cefQuery` 发送 → `JSBridgeHandler.java` 接收并路由到对应 Service
+- **Java 推送事件**：Java 端通过 `CefBrowser.executeJavaScript` 调用 `window.handleBridgeEvent(json)` → `App.vue` 的 `handleEvent` 方法处理
+
+完整事件列表见 `App.vue` 中的 `handleEvent` 方法。
+
+#### 会话管理
+
+- 每个会话类型（TCP 服务器、TCP 客户端、UDP 服务器、UDP 客户端、SSH 客户端）维护独立的会话数组（`tcpSessions`、`sshSessions` 等）和活跃 ID（`tcpActiveId`、`sshActiveId` 等）
+- `makeSession(prefix, extras)` 统一创建会话对象，自动生成自增 ID
+- 会话配置通过 `callJava('persistSessions', JSON.stringify(all))` 持久化到 Java 后端
+
+#### 主题系统
+
+- 支持 `light`、`dark`、`auto`（跟随系统）三种模式
+- 通过 CSS 变量（`--bg-primary`、`--text-primary` 等）实现主题切换
+- `auto` 模式使用 `@media (prefers-color-scheme: dark)` 媒体查询
+- 主题选择存储在 `localStorage` 并同步到 Java 后端
+
+#### 国际化
+
+- 中英文双语支持，通过 `i18n.js` 中的 `i18nMessages` 字典实现
+- `$t(key)` 方法提供模板内翻译；`setLang(cmd)` 切换语言
+- 语言设置持久化到 `localStorage` 并同步到 Java 后端
+
+---
+
 ## 项目结构
 
 ```

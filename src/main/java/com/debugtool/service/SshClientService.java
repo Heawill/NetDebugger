@@ -62,10 +62,16 @@ public class SshClientService {
 
             Properties config = new Properties();
             config.put("StrictHostKeyChecking", "no");
+            // Keep SSH session alive during idle periods
+            config.put("ServerAliveInterval", "15");
+            config.put("ServerAliveCountMax", "3");
             session.setConfig(config);
-            session.setTimeout(10000);
-
-            session.connect(10000);
+            // Connect timeout only applies during initial connection
+            // After connect, set socket timeout to 0 (infinite) so idle terminal doesn't drop
+            session.setTimeout(15000);
+            session.connect(15000);
+            // Disable SO_TIMEOUT on the established socket so read() never times out during idle
+            session.setTimeout(0);
 
             channel = (ChannelShell) session.openChannel("shell");
             channel.setPtySize(cols, rows, cols * 8, rows * 16);
@@ -78,7 +84,7 @@ public class SshClientService {
 
             // Inject PROMPT_COMMAND for SFTP path sync
             try {
-                String hook = "export PROMPT_COMMAND='[[ $PWD != $_ND_PWD ]] && { printf \"\\033]777;pwd;${PWD}\\007\"; _ND_PWD=$PWD; }'\n";
+                String hook = "export PROMPT_COMMAND='printf \"\\033]777;pwd;${PWD}\\007\"; _ND_PWD=$PWD'\n";
                 channelOut.write(hook.getBytes("UTF-8"));
                 channelOut.flush();
                 Thread.sleep(100);

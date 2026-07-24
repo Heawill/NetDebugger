@@ -439,6 +439,25 @@ export default {
         }
       } catch(e) {}
     },
+    cancelUpload() {
+      var idx = -1
+      this.downloads.forEach(function(d, i) {
+        if (d.id.indexOf('up_') === 0 && d.status === 'active') idx = i
+      })
+      if (idx >= 0) this.downloads.splice(idx, 1)
+    },
+    finishUpload() {
+      var dl = this.downloads.find(function(d) { return d.id.indexOf('up_') === 0 && d.status === 'active' })
+      if (dl) {
+        this.$set(dl, 'status', 'done')
+        var self = this
+        setTimeout(function() {
+          var idx = -1
+          self.downloads.forEach(function(d, i) { if (d.id === dl.id) idx = i })
+          if (idx >= 0) self.downloads.splice(idx, 1)
+        }, 3000)
+      }
+    },
     // ---- SFTP Context Menu ----
     showSftpContextMenu(e, session, file) {
       this.sftpContextMenu.visible = true

@@ -224,7 +224,7 @@ public class App {
                         return;
                     }
                     String path = exchange.getRequestURI().getPath();
-                    // /upload/sessionId/fileName
+                    // /upload/sessionId/fileName?relpath=subdir/...
                     String[] parts = path.substring(8).split("/", 2);
                     if (parts.length < 2) {
                         exchange.sendResponseHeaders(400, 0);
@@ -233,6 +233,20 @@ public class App {
                     }
                     String sessionId = parts[0];
                     String fileName = java.net.URLDecoder.decode(parts[1], "UTF-8");
+
+                    // Extract optional relpath query parameter for folder uploads
+                    String relpath = null;
+                    String query = exchange.getRequestURI().getQuery();
+                    if (query != null) {
+                        for (String pair : query.split("&")) {
+                            String[] kv = pair.split("=", 2);
+                            if ("relpath".equals(kv[0]) && kv.length > 1) {
+                                relpath = java.net.URLDecoder.decode(kv[1], "UTF-8");
+                                break;
+                            }
+                        }
+                    }
+
                     SshClientService svc = bridgeHandler.getSshClient(sessionId);
                     if (svc == null || !svc.isConnected()) {
                         String body = "Session not found or not connected";
@@ -241,7 +255,7 @@ public class App {
                         return;
                     }
                     byte[] data = exchange.getRequestBody().readAllBytes();
-                    svc.sftpUploadStream(new ByteArrayInputStream(data), fileName, data.length);
+                    svc.sftpUploadStream(new ByteArrayInputStream(data), fileName, data.length, relpath);
                     exchange.sendResponseHeaders(200, 0);
                     exchange.close();
                 } catch (Exception e) {

@@ -472,9 +472,88 @@ export default {
     },
     onSftpDrop(s, e) {
       this.dragOverSftp = null
-      var files = e.dataTransfer.files
-      if (!files || files.length === 0) return
-      this.uploadDroppedFiles(s, files)
+      var items = e.dataTransfer.items
+      if (!items || items.length === 0) {
+        var files = e.dataTransfer.files
+        if (!files || files.length === 0) return
+        this.uploadDroppedFiles(s, files)
+        return
+      }
+      // Use webkitGetAsEntry to detect folders and preserve directory structure
+      var entries = []
+      for (var i = 0; i < items.length; i++) {
+        var entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null
+        if (entry) {
+          entries.push(entry)
+        }
+      }
+      if (entries.length === 0) {
+        // Fallback: no entry API available, use flat file list
+        this.uploadDroppedFiles(s, e.dataTransfer.files)
+        return
+      }
+      this.traverseEntries(s, entries)
+    },
+    traverseEntries(s, entryList) {
+      var self = this
+      var allFiles = []
+      var pending = entryList.length
+      if (pending === 0) return
+      function processEntry(entry, relPath, callback) {
+        if (entry.isFile) {
+          entry.file(function(file) {
+            file._relPath = relPath
+            allFiles.push(file)
+            callback()
+          }, function(err) {
+            console.error('[NetDebugger] Failed to read file entry:', err)
+            callback()
+          })
+        } else if (entry.isDirectory) {
+          var dirName = entry.name
+          var childRelPath = relPath ? relPath + '/' + dirName : dirName
+          var dirReader = entry.createReader()
+          readAllEntries(dirReader, function(childEntries) {
+            if (childEntries.length === 0) { callback(); return }
+            var childPending = childEntries.length
+            for (var i = 0; i < childEntries.length; i++) {
+              processEntry(childEntries[i], childRelPath, function() {
+                childPending--
+                if (childPending === 0) callback()
+              })
+            }
+          }, function(err) {
+            console.error('[NetDebugger] Failed to read directory:', err)
+            callback()
+          })
+        } else {
+          callback()
+        }
+      }
+      function readAllEntries(dirReader, callback, errCallback) {
+        var all = []
+        function readBatch() {
+          try {
+            dirReader.readEntries(function(entries) {
+              if (entries.length === 0) {
+                callback(all)
+              } else {
+                all = all.concat(Array.prototype.slice.call(entries))
+                readBatch()
+              }
+            }, errCallback)
+          } catch(e) { errCallback(e) }
+        }
+        readBatch()
+      }
+      for (var i = 0; i < entryList.length; i++) {
+        processEntry(entryList[i], '', function() {
+          pending--
+          if (pending === 0 && allFiles.length > 0) {
+            self.uploadDroppedFiles(s, allFiles)
+          }
+        })
+      }
     },
     uploadDroppedFiles(s, files) {
       var self = this
@@ -487,7 +566,12 @@ export default {
           reader.onload = function() {
             var arrayBuffer = reader.result
             var xhr = new XMLHttpRequest()
-            xhr.open('POST', 'http://localhost:' + port + '/upload/' + encodeURIComponent(s.id) + '/' + encodeURIComponent(file.name))
+            var url = 'http://localhost:' + port + '/upload/' + encodeURIComponent(s.id) + '/' + encodeURIComponent(file.name)
+            // Append relpath for folder uploads to preserve directory structure
+            if (file._relPath) {
+              url += '?relpath=' + encodeURIComponent(file._relPath)
+            }
+            xhr.open('POST', url)
             xhr.upload.onprogress = function(evt) {
               if (evt.lengthComputable) {
                 var pct = Math.round(evt.loaded * 100 / evt.total)

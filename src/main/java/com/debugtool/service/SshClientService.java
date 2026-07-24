@@ -359,6 +359,14 @@ public class SshClientService {
      * Upload via HTTP stream with progress (called from /upload/ endpoint).
      */
     public void sftpUploadStream(InputStream in, String fileName, long totalSize) {
+        sftpUploadStream(in, fileName, totalSize, null);
+    }
+
+    /**
+     * Upload via HTTP stream with progress, optionally into a subdirectory.
+     * @param remoteSubDir relative subdirectory path (e.g. "foo/bar"), null or empty for current dir
+     */
+    public void sftpUploadStream(InputStream in, String fileName, long totalSize, String remoteSubDir) {
         if (!connected.get() || session == null || !session.isConnected()) {
             emit("error", "sshClient", "Not connected");
             return;
@@ -368,7 +376,13 @@ public class SshClientService {
             sftpChannel = (ChannelSftp) session.openChannel("sftp");
             sftpChannel.connect(5000);
 
-            String remotePath = sftpCurrentDir.equals("/") ? "/" + fileName : sftpCurrentDir + "/" + fileName;
+            String baseDir = sftpCurrentDir;
+            if (remoteSubDir != null && !remoteSubDir.isEmpty()) {
+                String subDirPath = sftpCurrentDir.equals("/") ? "/" + remoteSubDir : sftpCurrentDir + "/" + remoteSubDir;
+                mkdirsRecursive(sftpChannel, subDirPath);
+                baseDir = subDirPath;
+            }
+            String remotePath = baseDir.equals("/") ? "/" + fileName : baseDir + "/" + fileName;
             final String fname = fileName;
             sftpChannel.put(in, remotePath, new SftpProgressMonitor() {
                 private long total = totalSize;
@@ -396,6 +410,27 @@ public class SshClientService {
         } finally {
             if (sftpChannel != null && sftpChannel.isConnected()) {
                 sftpChannel.disconnect();
+            }
+        }
+    }
+
+    /**
+     * Recursively create directories on the remote SFTP server (mkdir -p equivalent).
+     */
+    private void mkdirsRecursive(ChannelSftp sftp, String path) throws SftpException {
+        String[] parts = path.split("/");
+        String current = "";
+        for (String part : parts) {
+            if (part.isEmpty()) continue;
+            current += "/" + part;
+            try {
+                sftp.stat(current);
+            } catch (SftpException e) {
+                if (e.id == ChannelSftp.SSH_FX_NO_SUCH_FILE) {
+                    sftp.mkdir(current);
+                } else {
+                    throw e;
+                }
             }
         }
     }

@@ -854,7 +854,9 @@ body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','M
 .ssh-config-row > div { flex: 1; min-width: 120px; }
 .ssh-config-row label { font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 2px; }
 
-.sftp-card { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.sftp-card { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+.sftp-card.drag-over { border-color: var(--accent-cyan) !important; box-shadow: 0 0 8px rgba(8,145,178,0.3), inset 0 0 20px rgba(8,145,178,0.06) !important; }
+.sftp-card.drag-over::after { content: ''; position: absolute; inset: 0; border: 2px dashed var(--accent-cyan); border-radius: var(--radius); pointer-events: none; z-index: 5; }
 .sftp-toolbar { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
 .sftp-path { flex: 1; font-size: 11px; font-family: monospace; color: var(--accent-cyan); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sftp-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; }

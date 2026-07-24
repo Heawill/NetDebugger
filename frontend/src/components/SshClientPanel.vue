@@ -33,7 +33,11 @@
           </div>
         </div>
         <!-- SFTP Panel -->
-        <div class="card sftp-card" v-if="activeSession.connected">
+        <div class="card sftp-card" v-if="activeSession.connected"
+             :class="{ 'drag-over': dragOverSftp === activeSession.id }"
+             @dragover.prevent="onSftpDragOver(activeSession)"
+             @dragleave="onSftpDragLeave(activeSession)"
+             @drop.prevent="onSftpDrop(activeSession, $event)">
           <div class="card-title" style="display:flex;align-items:center;">
             <span>{{ $t('sftpTitle') }}</span>
             <div class="sftp-actions">
@@ -161,7 +165,8 @@ export default {
       sftpContextMenu: { visible: false, x: 0, y: 0, session: null, file: null },
       sshTermContextMenu: { visible: false, x: 0, y: 0, session: null },
       cmdHistoryDialog: { visible: false, session: null },
-      showLeftPanel: true
+      showLeftPanel: true,
+      dragOverSftp: null
     }
   },
   computed: {
@@ -456,6 +461,75 @@ export default {
           self.downloads.forEach(function(d, i) { if (d.id === dl.id) idx = i })
           if (idx >= 0) self.downloads.splice(idx, 1)
         }, 3000)
+      }
+    },
+    // ---- SFTP Drag & Drop Upload ----
+    onSftpDragOver(s) {
+      this.dragOverSftp = s.id
+    },
+    onSftpDragLeave(s) {
+      if (this.dragOverSftp === s.id) this.dragOverSftp = null
+    },
+    onSftpDrop(s, e) {
+      this.dragOverSftp = null
+      var files = e.dataTransfer.files
+      if (!files || files.length === 0) return
+      this.uploadDroppedFiles(s, files)
+    },
+    uploadDroppedFiles(s, files) {
+      var self = this
+      var port = window.location.port || '80'
+      for (var i = 0; i < files.length; i++) {
+        ;(function(file) {
+          var dlId = 'up_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6)
+          self.downloads.unshift({ id: dlId, name: file.name, size: file.size, status: 'active', progress: 0, total: file.size, transferred: 0 })
+          var reader = new FileReader()
+          reader.onload = function() {
+            var arrayBuffer = reader.result
+            var xhr = new XMLHttpRequest()
+            xhr.open('POST', 'http://localhost:' + port + '/upload/' + encodeURIComponent(s.id) + '/' + encodeURIComponent(file.name))
+            xhr.upload.onprogress = function(evt) {
+              if (evt.lengthComputable) {
+                var pct = Math.round(evt.loaded * 100 / evt.total)
+                var dl = self.downloads.find(function(d){return d.id===dlId})
+                if (dl) {
+                  self.$set(dl, 'progress', pct)
+                  self.$set(dl, 'transferred', evt.loaded)
+                }
+              }
+            }
+            xhr.onload = function() {
+              var dl = self.downloads.find(function(d){return d.id===dlId})
+              if (dl) {
+                if (xhr.status === 200) {
+                  self.$set(dl, 'status', 'done')
+                  self.$set(dl, 'progress', 100)
+                } else {
+                  self.$set(dl, 'status', 'fail')
+                }
+                setTimeout(function() {
+                  var idx = -1
+                  self.downloads.forEach(function(d, j){ if(d.id===dlId) idx=j })
+                  if (idx>=0) self.downloads.splice(idx,1)
+                }, 5000)
+              }
+              self.refreshSftp(s)
+            }
+            xhr.onerror = function() {
+              var dl = self.downloads.find(function(d){return d.id===dlId})
+              if (dl) {
+                self.$set(dl, 'status', 'fail')
+                setTimeout(function() {
+                  var idx = -1
+                  self.downloads.forEach(function(d, j){ if(d.id===dlId) idx=j })
+                  if (idx>=0) self.downloads.splice(idx,1)
+                }, 5000)
+              }
+            }
+            xhr.send(arrayBuffer)
+          }
+          reader.readAsArrayBuffer(file)
+        })(files[i])
       }
     },
     // ---- SFTP Context Menu ----

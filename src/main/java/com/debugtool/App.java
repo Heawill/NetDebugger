@@ -225,7 +225,7 @@ public class App {
                     }
                     String path = exchange.getRequestURI().getPath();
                     // /upload/sessionId/fileName
-                    String[] parts = path.substring(9).split("/", 2);
+                    String[] parts = path.substring(8).split("/", 2);
                     if (parts.length < 2) {
                         exchange.sendResponseHeaders(400, 0);
                         exchange.close();

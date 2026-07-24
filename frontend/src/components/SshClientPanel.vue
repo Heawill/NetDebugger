@@ -214,7 +214,7 @@ export default {
           if (end > start) {
             var pathBytes = bytes.slice(start, end)
             var path = new TextDecoder().decode(pathBytes)
-            if (path.startsWith('/')) {
+            if (path.startsWith('/') && path !== s.sftpPath) {
               this.$set(s, 'sftpPath', path)
               var self = this
               this.$nextTick(function() { self.refreshSftp(s) })
